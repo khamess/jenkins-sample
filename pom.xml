@@ -9,10 +9,10 @@
   <url>http://maven.apache.org</url>
   
   <properties>
-  <sonar.organization>bnasslahsen</sonar.organization>
-  <sonar.projectKey>bnasslahsen_jenkins-sample</sonar.projectKey>
-  <sonar.host.url>https://sonarcloud.io</sonar.host.url>
- </properties>
+   <sonar.organization>khamess</sonar.organization>
+   <sonar.host.url>https://sonarcloud.io</sonar.host.url>
+  </properties>
+
   
   <dependencies>
     <dependency>
