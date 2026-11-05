@@ -174,6 +174,111 @@ def hl_top_traders(limit=25, min_value=1e6):
     return picked, agg
 
 
+def defillama(coins):
+    """TVL des chaines et protocoles + flux USDT/USDC par chaine (DefiLlama).
+
+    Renvoie (par_symbole, global) ; par_symbole[SYM] peut contenir :
+      chain, chain_tvl, chain_tvl_7d (%), stables, stables_1d, stables_7d, stables_30d ($)
+      proto_tvl, proto_tvl_1d (%), proto_tvl_7d (%)
+    """
+    out = {}
+    ids = {c["id"]: c["symbol"].upper() for c in coins if c.get("id")}
+    syms = {c["symbol"].upper() for c in coins}
+    chains = get("https://api.llama.fi/v2/chains", timeout=60)
+    by_name = {c["name"]: c for c in chains}
+    assets = get("https://stablecoins.llama.fi/stablecoins?includePrices=false", timeout=90)["peggedAssets"]
+    glob = {}
+    flows = {}
+    for a in assets:
+        if a["symbol"] not in ("USDT", "USDC"):
+            continue
+        cur = a["circulating"].get("peggedUSD", 0)
+        glob[a["symbol"]] = dict(
+            cur=cur,
+            d1=cur - a.get("circulatingPrevDay", {}).get("peggedUSD", cur),
+            d7=cur - a.get("circulatingPrevWeek", {}).get("peggedUSD", cur),
+            d30=cur - a.get("circulatingPrevMonth", {}).get("peggedUSD", cur))
+        for ch, v in a.get("chainCirculating", {}).items():
+            c = v["current"].get("peggedUSD", 0)
+            f = flows.setdefault(ch, [0.0, 0.0, 0.0, 0.0])
+            f[0] += c
+            f[1] += c - v.get("circulatingPrevDay", {}).get("peggedUSD", c)
+            f[2] += c - v.get("circulatingPrevWeek", {}).get("peggedUSD", c)
+            f[3] += c - v.get("circulatingPrevMonth", {}).get("peggedUSD", c)
+    chain_rows = []
+    for name, f in flows.items():
+        ch = by_name.get(name, {})
+        sym = ids.get(ch.get("gecko_id")) or (ch.get("tokenSymbol") or "").upper() or None
+        chain_rows.append(dict(chain=name, sym=sym, stables=f[0], stables_1d=f[1], stables_7d=f[2],
+                               stables_30d=f[3], tvl=ch.get("tvl")))
+    # TVL 7j des chaines dont le token est dans le scan
+    for c in sorted(chains, key=lambda c: -(c.get("tvl") or 0))[:60]:
+        sym = ids.get(c.get("gecko_id"))
+        if not sym and (c.get("tokenSymbol") or "").upper() in syms:
+            sym = c["tokenSymbol"].upper()
+        if not sym or (c.get("tvl") or 0) < 5e7:
+            continue
+        info = out.setdefault(sym, {})
+        info["chain"], info["chain_tvl"] = c["name"], c["tvl"]
+        try:
+            h = get("https://api.llama.fi/v2/historicalChainTvl/%s" % urllib.request.quote(c["name"]), timeout=60)
+            if len(h) > 8 and h[-8]["tvl"]:
+                info["chain_tvl_7d"] = 100 * (h[-1]["tvl"] / h[-8]["tvl"] - 1)
+        except RuntimeError:
+            pass
+        time.sleep(0.2)
+    for r in chain_rows:
+        if r["sym"] and r["sym"] in out:
+            out[r["sym"]].update(stables=r["stables"], stables_1d=r["stables_1d"],
+                                 stables_7d=r["stables_7d"], stables_30d=r["stables_30d"])
+    # protocoles : somme des versions par symbole (hors CEX)
+    agg = {}
+    for p in get("https://api.llama.fi/protocols", timeout=120):
+        if p.get("category") in ("CEX", "Chain") or not p.get("tvl"):
+            continue
+        sym = ids.get(p.get("gecko_id")) or (p.get("symbol") or "").upper()
+        if not sym or sym == "-":
+            continue
+        tvl = p["tvl"]
+        a = agg.setdefault(sym, [0.0, 0.0, 0.0])
+        a[0] += tvl
+        a[1] += tvl / (1 + (p.get("change_1d") or 0) / 100)
+        a[2] += tvl / (1 + (p.get("change_7d") or 0) / 100)
+    for sym, (tvl, p1, p7) in agg.items():
+        if sym in syms and tvl >= 2e7:
+            info = out.setdefault(sym, {})
+            info.update(proto_tvl=tvl, proto_tvl_1d=100 * (tvl / p1 - 1) if p1 else 0,
+                        proto_tvl_7d=100 * (tvl / p7 - 1) if p7 else 0)
+    return out, glob, sorted(chain_rows, key=lambda r: -r["stables"])
+
+
+def fm(x):
+    """Montant en $ lisible : 1.2 Md / 340 M."""
+    if x is None:
+        return "-"
+    s = "-" if x < 0 else ""
+    x = abs(x)
+    return s + ("%.1f Md" % (x / 1e9) if x >= 1e9 else "%.0f M" % (x / 1e6))
+
+
+def fm_signed(x):
+    return ("+" if x >= 0 else "") + fm(x)
+
+
+def llama_line(d):
+    if not d:
+        return None
+    parts = []
+    if "chain_tvl" in d:
+        parts.append("TVL chaine %s $%s" % (fm(d["chain_tvl"]), " (%+.1f %% 7j)" % d["chain_tvl_7d"] if "chain_tvl_7d" in d else ""))
+    if "stables" in d:
+        parts.append("USDT+USDC sur la chaine %s $ (24h %s, 7j %s, 30j %s)"
+                     % (fm(d["stables"]), fm_signed(d["stables_1d"]), fm_signed(d["stables_7d"]), fm_signed(d["stables_30d"])))
+    if "proto_tvl" in d:
+        parts.append("TVL protocole %s $ (24h %+.1f %%, 7j %+.1f %%)" % (fm(d["proto_tvl"]), d["proto_tvl_1d"], d["proto_tvl_7d"]))
+    return " · ".join(parts) if parts else None
+
+
 # ---------- analyse ----------
 def analyse(c, tick, detail):
     sym = c["symbol"].upper() + "_USDT"
@@ -320,6 +425,12 @@ def main():
         traders, agg = [], {}
         errors.append(str(e))
 
+    try:
+        llama, sglob, schains = defillama(coins)
+    except RuntimeError as e:
+        llama, sglob, schains = {}, {}, []
+        errors.append(str(e))
+
     btc = next((a for a in res if a["sym"] == "BTC"), None)
     up7 = sum(a["d7"] > 0 for a in res)
     bull = sum(a["trend"] >= 3 for a in res)
@@ -367,6 +478,9 @@ def main():
         w("- Contexte : RSI J %.0f / 4h %.0f · EMA20 %s · EMA50 %s · EMA200 %s · plage 30j %s–%s · funding %.3f %% · OI ~%.0f M$"
           % (a["rsi_d"], a["rsi_4h"], fp(a["e20"]), fp(a["e50"]), fp(a["e200"]), fp(a["lo30"]),
              fp(a["hi30"]), a["fund"], a["oi"] / 1e6))
+        ll = llama_line(llama.get(a["sym"]))
+        if ll:
+            w("- DefiLlama : " + ll)
         if hl:
             w("- Top traders Hyperliquid : %d long (%.1f M$) / %d short (%.1f M$)"
               % (hl["nl"], hl["long"] / 1e6, hl["ns"], hl["short"] / 1e6))
@@ -374,6 +488,36 @@ def main():
         w("")
         w("Setups ecartes car peu liquides sur MEXC (< %.0f M$/24h, risque de glissement et de meches) : %s"
           % (args.min_vol / 1e6, ", ".join("%s %s" % (a["setup"].split()[0], a["sym"]) for a in illiq[:20])))
+    w("")
+    w("## Flux DeFi (DefiLlama)")
+    if sglob:
+        for k in ("USDT", "USDC"):
+            g = sglob.get(k)
+            if g:
+                w("- %s en circulation %s $ · 24h %s · 7j %s · 30j %s"
+                  % (k, fm(g["cur"]), fm_signed(g["d1"]), fm_signed(g["d7"]), fm_signed(g["d30"])))
+        w("- (emission = liquidite fraiche qui entre dans la crypto ; rachat = liquidite qui sort)")
+        w("")
+        w("USDT+USDC par chaine (top 10 par encours) :")
+        w("| Chaine | Token | Encours | 24h | 7j | 30j | TVL |")
+        w("|---|---|---|---|---|---|---|")
+        for r in schains[:10]:
+            w("| %s | %s | %s | %s | %s | %s | %s |" % (r["chain"], r["sym"] or "-", fm(r["stables"]), fm_signed(r["stables_1d"]),
+                                                     fm_signed(r["stables_7d"]), fm_signed(r["stables_30d"]), fm(r["tvl"])))
+        movers = sorted([r for r in schains if abs(r["stables_7d"]) >= 5e7], key=lambda r: -r["stables_7d"])
+        if movers:
+            w("")
+            w("Plus gros flux USDT+USDC sur 7j : entrees %s ; sorties %s"
+              % (", ".join("%s %s" % (r["chain"], fm_signed(r["stables_7d"])) for r in movers[:5] if r["stables_7d"] > 0) or "-",
+                 ", ".join("%s %s" % (r["chain"], fm_signed(r["stables_7d"])) for r in movers[::-1][:5] if r["stables_7d"] < 0) or "-"))
+        tv = [(a["sym"], llama[a["sym"]]) for a in res if a["sym"] in llama and a["vol"] >= args.min_vol]
+        if tv:
+            w("")
+            w("Cryptos liquides du scan avec donnees DefiLlama :")
+            for sym, d in tv:
+                w("- %s : %s" % (sym, llama_line(d)))
+    else:
+        w("Donnees DefiLlama indisponibles aujourd'hui.")
     w("")
     w("## Meilleurs traders Hyperliquid (gagnants semaine + mois + historique, compte >= 1 M$)")
     if traders:

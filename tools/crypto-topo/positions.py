@@ -19,7 +19,7 @@ import urllib.request
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from topo import ema, rsi, atr, macd_hist  # noqa: E402
+from topo import ema, rsi, atr, macd_hist, defillama, llama_line, fm, fm_signed  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FILE = os.path.join(HERE, "positions.json")
@@ -120,7 +120,7 @@ def cmd_list(_):
               % (r["side"], r["sym"], r["entry"], r["lev"], r["margin"], r["notional"], r["stop"], r["t1"], r["t2"], r["liq"]))
 
 
-def check_one(r):
+def check_one(r, llama=None):
     sym, long_ = r["sym"], r["side"] == "LONG"
     sgn = 1 if long_ else -1
     t = api("ticker?symbol=%s_USDT" % sym)
@@ -199,6 +199,9 @@ def check_one(r):
     print("- Volume derniere 4h x%.1f la moyenne · meche haute %.0f %% / basse %.0f %% · funding %.3f %%"
           % (vratio, 100 * up_wick, 100 * dn_wick, fund))
     print("- Plus haut / bas 24h : %g / %g" % (max(h1[-24:]), min(l1[-24:])))
+    ll = llama_line((llama or {}).get(sym))
+    if ll:
+        print("- DefiLlama : " + ll)
     print("- Signaux : " + (" ; ".join(sig) if sig else "aucun, la position se deroule normalement"))
     print()
 
@@ -214,9 +217,16 @@ def cmd_check(_):
         print("BTC %g · RSI 4h %.0f · EMA20/50 4h %g / %g\n" % (b[-1], rsi(b), round(ema(b, 20)[-1]), round(ema(b, 50)[-1])))
     except RuntimeError:
         pass
+    llama = {}
+    try:
+        llama, glob, _ = defillama([{"symbol": r["sym"]} for r in rows])
+        print("USDT+USDC (DefiLlama) : " + " · ".join(
+            "%s %s $ (24h %s, 7j %s)" % (k, fm(g["cur"]), fm_signed(g["d1"]), fm_signed(g["d7"])) for k, g in glob.items()) + "\n")
+    except RuntimeError as e:
+        print("DefiLlama indisponible : %s\n" % e)
     for r in rows:
         try:
-            check_one(r)
+            check_one(r, llama)
         except RuntimeError as e:
             print("! %s %s : %s\n" % (r["side"], r["sym"], e))
 
