@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Topo crypto quotidien : top 50 (CoinGecko) x contrats perpetuels MEXC,
+"""Topo crypto quotidien : top 500 (CoinGecko) x contrats perpetuels MEXC,
 indicateurs techniques, setups long/short dimensionnes au risque, et
 positionnement des meilleurs traders Hyperliquid.
 
@@ -101,9 +101,14 @@ def bollinger_pct(c, n=20):
 
 # ---------- donnees ----------
 def top_coins(n):
-    rows = get("https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd"
-               "&order=market_cap_desc&per_page=150&page=1"
-               "&price_change_percentage=24h,7d,30d")
+    rows = []
+    for page in range(1, (n + 249) // 250 + 1):
+        if page > 1:
+            time.sleep(15)  # limite de debit de l'API gratuite CoinGecko
+        rows += get("https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd"
+                    "&order=market_cap_desc&per_page=250&page=%d"
+                    "&price_change_percentage=24h,7d,30d" % page)
+    rows = rows[:n]
     out = []
     for c in rows:
         s = c["symbol"].lower()
@@ -282,7 +287,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--capital", type=float, default=3000)
     ap.add_argument("--risk", type=float, default=1.0, help="%% du capital risque par trade")
-    ap.add_argument("--top", type=int, default=50)
+    ap.add_argument("--top", type=int, default=500, help="taille du classement CoinGecko analyse")
     ap.add_argument("--min-vol", type=float, default=20e6, help="volume futures MEXC 24h minimum ($)")
     ap.add_argument("--out")
     args = ap.parse_args()
@@ -298,8 +303,6 @@ def main():
 
     res = []
     for c in coins:
-        if len(res) >= args.top:
-            break
         sym = c["symbol"].upper() + "_USDT"
         if sym not in ticks:
             continue
@@ -325,8 +328,8 @@ def main():
 
     w("# Topo crypto — %s UTC" % now.strftime("%Y-%m-%d %H:%M"))
     w("")
-    w("Capital %.0f $ · risque %.1f %% par trade (%.0f $) · %d cryptos analysees (top CoinGecko avec perpetuel MEXC)"
-      % (args.capital, args.risk, args.capital * args.risk / 100, len(res)))
+    w("Capital %.0f $ · risque %.1f %% par trade (%.0f $) · %d cryptos analysees (top %d CoinGecko avec perpetuel MEXC)"
+      % (args.capital, args.risk, args.capital * args.risk / 100, len(res), args.top))
     w("")
     w("## Marche")
     if btc:
@@ -335,10 +338,10 @@ def main():
     w("- Mediane 24h %+.1f %% · %d/%d en hausse sur 7j · %d en tendance haussiere, %d en tendance baissiere"
       % (med, up7, len(res), bull, bear))
     w("")
-    w("## Tableau (trie par rang)")
+    w("## Tableau (liquides, volume futures MEXC >= %.0f M$, trie par rang)" % (args.min_vol / 1e6))
     w("| # | Crypto | Prix | 24h | 7j | 30j | RSI J | RSI 4h | MACD | Tend. | ATR % | Funding % | Vol MEXC M$ | Setup |")
     w("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
-    for a in res:
+    for a in [a for a in res if a["vol"] >= args.min_vol]:
         m = "-" if a["macd"] is None else ("↑" if a["macd"] > a["macd_prev"] else "↓") + ("+" if a["macd"] > 0 else "−")
         w("| %d | %s | %s | %+.1f | %+.1f | %+.1f | %.0f | %.0f | %s | %+d | %.1f | %.3f | %.0f | %s |"
           % (a["rank"], a["sym"], fp(a["px"]), a["d1"], a["d7"], a["d30"], a["rsi_d"], a["rsi_4h"], m,
@@ -349,6 +352,7 @@ def main():
     setups.sort(key=lambda a: (-(abs(a["trend"]) + abs(a["mom"])), -a["vol"]))
     if not setups:
         w("Aucun setup propre aujourd'hui sur les cryptos liquides. Ne rien faire est une position.")
+    illiq = [a for a in res if a["setup"] and a["vol"] < args.min_vol]
     for a in setups[:6]:
         s = size_trade(a, args.capital, args.risk)
         hl = agg.get(a["sym"])
@@ -366,6 +370,10 @@ def main():
         if hl:
             w("- Top traders Hyperliquid : %d long (%.1f M$) / %d short (%.1f M$)"
               % (hl["nl"], hl["long"] / 1e6, hl["ns"], hl["short"] / 1e6))
+    if illiq:
+        w("")
+        w("Setups ecartes car peu liquides sur MEXC (< %.0f M$/24h, risque de glissement et de meches) : %s"
+          % (args.min_vol / 1e6, ", ".join("%s %s" % (a["setup"].split()[0], a["sym"]) for a in illiq[:20])))
     w("")
     w("## Meilleurs traders Hyperliquid (gagnants semaine + mois + historique, compte >= 1 M$)")
     if traders:
