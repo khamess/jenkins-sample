@@ -342,7 +342,11 @@ def analyse(c, tick, detail):
             why.append("funding negatif (%.3f%%) : shorts encombres" % fund)
         if setup.startswith("SHORT") and fund > 0.02:
             why.append("funding eleve (%.3f%%) : longs encombres" % fund)
-    return dict(sym=c["symbol"].upper(), rank=c["market_cap_rank"], px=px,
+    perf = {}
+    for lab, n in (("24h", 6), ("2j", 12), ("5j", 30), ("7j", 42)):
+        perf[lab] = 100 * (px / hc[-1 - n] - 1) if len(hc) > n and hc[-1 - n] else None
+    # volume 24h vs moyenne des 7 jours precedents (montant 4h)
+    return dict(perf=perf, sym=c["symbol"].upper(), rank=c["market_cap_rank"], px=px,
                 d1=c.get("price_change_percentage_24h_in_currency") or 0,
                 d7=c.get("price_change_percentage_7d_in_currency") or 0,
                 d30=c.get("price_change_percentage_30d_in_currency") or 0,
@@ -437,6 +441,15 @@ def main():
         errors.append(str(e))
 
     btc = next((a for a in res if a["sym"] == "BTC"), None)
+    WIN = ("24h", "2j", "5j", "7j")
+    if btc:
+        for a in res:
+            a["rs"] = {k: (a["perf"][k] - btc["perf"][k]) if a["perf"].get(k) is not None and btc["perf"].get(k) is not None else None
+                       for k in WIN}
+            vals = [v for v in a["rs"].values() if v is not None]
+            a["rs_avg"] = sum(vals) / len(vals) if vals else 0
+            a["rs_up"] = sum(1 for v in vals if v > 0)
+            a["rs_dn"] = sum(1 for v in vals if v < 0)
     up7 = sum(a["d7"] > 0 for a in res)
     bull = sum(a["trend"] >= 3 for a in res)
     bear = sum(a["trend"] <= -3 for a in res)
@@ -486,6 +499,8 @@ def main():
         w("- Contexte : RSI J %.0f / 4h %.0f · EMA20 %s · EMA50 %s · EMA200 %s · plage 30j %s–%s · funding %.3f %% · OI ~%.0f M$"
           % (a["rsi_d"], a["rsi_4h"], fp(a["e20"]), fp(a["e50"]), fp(a["e200"]), fp(a["lo30"]),
              fp(a["hi30"]), a["fund"], a["oi"] / 1e6))
+        if a.get("rs"):
+            w("- Force relative vs BTC : " + " · ".join("%s %s" % (k, "-" if a["rs"][k] is None else "%+.1f pt" % a["rs"][k]) for k in WIN))
         if a.get("ict"):
             pro, con = ict.confluence(a["ict"], a["setup"])
             w("- Lecture ICT 4h : " + ict.describe(a["ict"]))
@@ -520,6 +535,33 @@ def main():
         stab = sum(v for _, v in sd["USDT"]) + sum(v for _, v in sd["USDC"])
     except RuntimeError as e:
         w("- Stablecoins indisponibles : %s" % e)
+    w("")
+    w("## Force relative vs BTC (liquides, volume futures MEXC >= %.0f M$)" % (args.min_vol / 1e6))
+    if btc:
+        w("BTC : 24h %+.1f %% · 2j %+.1f %% · 5j %+.1f %% · 7j %+.1f %%" % tuple(btc["perf"][k] or 0 for k in WIN))
+        liq = [a for a in res if a["sym"] != "BTC" and a["vol"] >= args.min_vol and a.get("rs")]
+        hdr = "| Crypto | Prix | vs BTC 24h | 2j | 5j | 7j | Vol MEXC M$ | Funding % | Structure 4h |"
+        sep = "|---|---|---|---|---|---|---|---|---|"
+
+        def row(a):
+            st = a["ict"]["structure"][0] if a.get("ict") and a["ict"]["structure"] else "-"
+            return "| %s | %s | %s | %s | %s | %s | %.0f | %.3f | %s |" % (
+                a["sym"], fp(a["px"]), *["-" if a["rs"][k] is None else "%+.1f" % a["rs"][k] for k in WIN],
+                a["vol"] / 1e6, a["fund"], st)
+        outp = sorted([a for a in liq if a["rs_up"] >= 3], key=lambda a: -a["rs_avg"])[:10]
+        undp = sorted([a for a in liq if a["rs_dn"] >= 3], key=lambda a: a["rs_avg"])[:10]
+        w("")
+        w("**Surperforment BTC** (sur au moins 3 des 4 periodes) -> candidats LONG quand le marche rebondit :")
+        w(hdr)
+        w(sep)
+        for a in outp:
+            w(row(a))
+        w("")
+        w("**Sous-performent BTC** (sur au moins 3 des 4 periodes) -> candidats SHORT quand le marche baisse :")
+        w(hdr)
+        w(sep)
+        for a in undp:
+            w(row(a))
     w("")
     w("## Lecture ICT 4h des principales cryptos liquides")
     for a in [a for a in res if a["vol"] >= args.min_vol and a.get("ict")][:12]:
