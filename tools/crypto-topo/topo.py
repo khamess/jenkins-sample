@@ -15,6 +15,7 @@ import time
 import urllib.request
 from datetime import datetime, timezone
 
+import flows
 import ict
 
 UA = {"User-Agent": "crypto-topo/1.0", "Accept": "application/json"}
@@ -495,6 +496,20 @@ def main():
         w("")
         w("Setups ecartes car peu liquides sur MEXC (< %.0f M$/24h, risque de glissement et de meches) : %s"
           % (args.min_vol / 1e6, ", ".join("%s %s" % (a["setup"].split()[0], a["sym"]) for a in illiq[:20])))
+    w("")
+    w("## Flux institutionnels et liquidite fraiche")
+    try:
+        w("ETF spot US (cryptoetf.today, donnees T+1 en M$) :")
+        for line in flows.etf_lines(flows.etf_flows()):
+            w("- " + line)
+    except RuntimeError as e:
+        w("- ETF indisponibles : %s" % e)
+    try:
+        w("USDT / USDC imprimes ou brules par jour (DefiLlama) :")
+        for line in flows.stable_lines(flows.stable_daily()):
+            w("- " + line)
+    except RuntimeError as e:
+        w("- Stablecoins indisponibles : %s" % e)
     w("")
     w("## Lecture ICT 4h des principales cryptos liquides")
     for a in [a for a in res if a["vol"] >= args.min_vol and a.get("ict")][:12]:

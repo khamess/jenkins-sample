@@ -19,6 +19,7 @@ import urllib.request
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import flows  # noqa: E402
 import ict  # noqa: E402
 from topo import ema, rsi, atr, macd_hist, defillama, llama_line, fm, fm_signed  # noqa: E402
 
@@ -236,6 +237,14 @@ def cmd_check(_):
             "%s %s $ (24h %s, 7j %s)" % (k, fm(g["cur"]), fm_signed(g["d1"]), fm_signed(g["d7"])) for k, g in glob.items()) + "\n")
     except RuntimeError as e:
         print("DefiLlama indisponible : %s\n" % e)
+    try:
+        syms = {r["sym"] for r in rows}
+        fl = flows.etf_flows()
+        etf = [l for l in flows.etf_lines(fl) if l.startswith("CEFI") or l.split(" ")[0] in syms | {"BTC"}]
+        print("Flux ETF : " + " | ".join(etf))
+        print("Stablecoins : " + " | ".join(flows.stable_lines(flows.stable_daily())) + "\n")
+    except RuntimeError as e:
+        print("Flux ETF / stablecoins indisponibles : %s\n" % e)
     for r in rows:
         try:
             check_one(r, llama)
