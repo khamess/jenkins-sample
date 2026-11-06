@@ -134,7 +134,7 @@ def cmd_add(a):
     notional = a.margin * a.lev
     risk = notional * abs(a.entry - a.stop) / a.entry + 2 * FEE * notional
     liq = a.entry * (1 - sgn * liq_pct)
-    t = dict(liq=round(liq, 6), id="%s-%s-%s" % (now.strftime("%Y%m%d"), a.sym, a.side), date=now.isoformat(timespec="minutes"),
+    t = dict(liq=round(liq, 6) if a.lev > 1 else None, id="%s-%s-%s" % (now.strftime("%Y%m%d"), a.sym, a.side), date=now.isoformat(timespec="minutes"),
              sym=a.sym.upper(), side=a.side, entry=a.entry, stop=a.stop, t1=a.t1, t2=a.t2, lev=a.lev,
              margin=a.margin, notional=round(notional, 2), risk=round(risk, 2), valid_h=a.valid,
              status="en attente", note=a.note)
