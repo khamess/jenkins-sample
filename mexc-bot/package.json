@@ -1,0 +1,15 @@
+{
+  "name": "mexc-futures-bot",
+  "version": "1.0.0",
+  "description": "Bot autonome MEXC Futures : liste long/short générée chaque matin, exécution et gestion du risque.",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node src/index.js",
+    "paper": "node src/index.js --mode=paper",
+    "live": "node src/index.js --mode=live",
+    "liste": "node src/index.js --scan-only",
+    "test-api": "node src/index.js --test-api"
+  }
+}
