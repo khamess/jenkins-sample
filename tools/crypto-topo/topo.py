@@ -15,6 +15,8 @@ import time
 import urllib.request
 from datetime import datetime, timezone
 
+import ict
+
 UA = {"User-Agent": "crypto-topo/1.0", "Accept": "application/json"}
 STABLE = {"usdt", "usdc", "dai", "fdusd", "usde", "usds", "tusd", "pyusd", "usd1",
           "usdd", "frax", "busd", "usdtb", "bsc-usd", "susde", "rlusd", "usdf", "usd0",
@@ -285,6 +287,7 @@ def analyse(c, tick, detail):
     dh, dl, dc, _ = mexc_klines(sym, "Day1", 260)
     time.sleep(0.15)
     hh, hl, hc, _ = mexc_klines(sym, "Hour4", 30)
+    ict_r = ict.read(hc, hh, hl, hc, dh, dl, float(tick["lastPrice"])) if len(hc) > 20 else None
     time.sleep(0.15)
     if len(dc) < 60 or len(hc) < 40:
         return None
@@ -343,7 +346,7 @@ def analyse(c, tick, detail):
                 d30=c.get("price_change_percentage_30d_in_currency") or 0,
                 e20=e20, e50=e50, e200=e200, rsi_d=r_d, rsi_4h=r_4h, macd=mh, macd_prev=mh_prev,
                 atr=a_d, atr_pct=100 * a_d / px, bb=bb, hi30=hi30, lo30=lo30, fund=fund,
-                oi=oi_usd, vol=vol24, trend=trend, mom=mom, setup=setup, why=why,
+                oi=oi_usd, vol=vol24, trend=trend, mom=mom, setup=setup, why=why, ict=ict_r,
                 maxlev=(detail or {}).get("maxLeverage"),
                 taker=float((detail or {}).get("takerFeeRate") or 0.0002))
 
@@ -478,6 +481,10 @@ def main():
         w("- Contexte : RSI J %.0f / 4h %.0f · EMA20 %s · EMA50 %s · EMA200 %s · plage 30j %s–%s · funding %.3f %% · OI ~%.0f M$"
           % (a["rsi_d"], a["rsi_4h"], fp(a["e20"]), fp(a["e50"]), fp(a["e200"]), fp(a["lo30"]),
              fp(a["hi30"]), a["fund"], a["oi"] / 1e6))
+        if a.get("ict"):
+            pro, con = ict.confluence(a["ict"], a["setup"])
+            w("- Lecture ICT 4h : " + ict.describe(a["ict"]))
+            w("- Confluence ICT : pour %s ; contre %s" % (", ".join(pro) or "-", ", ".join(con) or "-"))
         ll = llama_line(llama.get(a["sym"]))
         if ll:
             w("- DefiLlama : " + ll)
@@ -488,6 +495,10 @@ def main():
         w("")
         w("Setups ecartes car peu liquides sur MEXC (< %.0f M$/24h, risque de glissement et de meches) : %s"
           % (args.min_vol / 1e6, ", ".join("%s %s" % (a["setup"].split()[0], a["sym"]) for a in illiq[:20])))
+    w("")
+    w("## Lecture ICT 4h des principales cryptos liquides")
+    for a in [a for a in res if a["vol"] >= args.min_vol and a.get("ict")][:12]:
+        w("- **%s** %s : %s" % (a["sym"], fp(a["px"]), ict.describe(a["ict"])))
     w("")
     w("## Flux DeFi (DefiLlama)")
     if sglob:

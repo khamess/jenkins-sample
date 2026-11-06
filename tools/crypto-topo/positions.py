@@ -19,6 +19,7 @@ import urllib.request
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import ict  # noqa: E402
 from topo import ema, rsi, atr, macd_hist, defillama, llama_line, fm, fm_signed  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -199,6 +200,17 @@ def check_one(r, llama=None):
     print("- Volume derniere 4h x%.1f la moyenne · meche haute %.0f %% / basse %.0f %% · funding %.3f %%"
           % (vratio, 100 * up_wick, 100 * dn_wick, fund))
     print("- Plus haut / bas 24h : %g / %g" % (max(h1[-24:]), min(l1[-24:])))
+    ir = ict.read(o4, h4, l4, c4, hd, ld, px)
+    pro, con = ict.confluence(ir, r["side"])
+    print("- Lecture ICT 4h : " + ict.describe(ir))
+    print("- Confluence ICT pour la position : pour %s ; contre %s" % (", ".join(pro) or "-", ", ".join(con) or "-"))
+    st = ir["structure"]
+    if st and st[2] <= 2 and ((st[0] == "baissiere") == long_):
+        sig.append("CASSURE DE STRUCTURE 4h contre la position (cloture au-dela de %g) -> scenario invalide ?" % st[1])
+    for sd, name, lv, age in ir["sweeps"]:
+        if (sd == "haut") == long_ and age <= 1:
+            sig.append("liquidite prise au-dessus de %s (%g) puis rejet -> securiser" % (name, lv) if long_ else
+                       "liquidite prise sous %s (%g) puis rejet -> securiser" % (name, lv))
     ll = llama_line((llama or {}).get(sym))
     if ll:
         print("- DefiLlama : " + ll)
