@@ -1,0 +1,20 @@
+{
+  "name": "solana-agent-bot",
+  "version": "1.0.0",
+  "description": "Bot de trading autonome Solana à 6 agents (scout, filter, analyst, executor, risk, logger) avec tableau de bord.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "paper": "MODE=paper node src/index.js",
+    "sim": "MODE=paper SIM=1 node src/index.js",
+    "live": "MODE=live node src/index.js"
+  },
+  "dependencies": {
+    "@solana/web3.js": "1.98.0",
+    "bs58": "6.0.0"
+  }
+}

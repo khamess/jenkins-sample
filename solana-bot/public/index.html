@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sol Desk Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#070a18; --panel:#0c1229; --panel2:#0f1733; --line:#1c2752; --line2:#27346a;
+  --text:#d9e0ff; --mute:#7c87b5; --dim:#4b557f;
+  --purple:#a493ff; --blue:#4f8cff; --cyan:#33d6c9; --green:#3fe08f; --red:#ff5277; --amber:#f6b545; --pink:#ff7ad9;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace; --sans:Inter,system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(1200px 600px at 20% -10%,#141c46 0,transparent 60%),var(--bg);color:var(--text);font-family:var(--mono);font-size:13px;min-height:100vh}
+.win{max-width:1280px;margin:16px auto;border:1px solid var(--line);border-radius:14px;background:linear-gradient(180deg,#0a1024,#080c1d);box-shadow:0 30px 80px #0008}
+.chrome{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);color:var(--mute);font-size:12px}
+.dot{width:11px;height:11px;border-radius:50%}
+.chrome .t{flex:1;text-align:center}
+.badge{border:1px solid var(--line2);border-radius:6px;padding:2px 8px;font-size:11px;color:var(--mute)}
+.badge.live{color:var(--red);border-color:var(--red)}
+.badge.paper{color:var(--cyan);border-color:var(--cyan)}
+header{display:flex;gap:20px;align-items:center;padding:18px 20px;flex-wrap:wrap}
+.orb{width:84px;height:84px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#f2eaff,#a98bff 45%,#5a3fd6 80%);box-shadow:0 0 40px #8b6cff88;display:grid;place-items:center;cursor:pointer;border:0;flex:none}
+.orb i{display:flex;gap:7px}.orb i b{width:9px;height:26px;background:#0b0820;border-radius:4px}
+.orb.paused i b:last-child{display:none}.orb.paused i b:first-child{width:0;height:0;background:none;border-left:22px solid #0b0820;border-top:14px solid transparent;border-bottom:14px solid transparent;border-radius:0;margin-left:6px}
+.title{flex:1;min-width:260px}
+.title h1{margin:0;font-size:30px;font-weight:800;letter-spacing:.5px}
+.title h1 .a{color:var(--blue)}
+.ver{font-size:11px;padding:3px 8px;border-radius:6px;background:linear-gradient(90deg,#7b5cff,#2ad4c3);color:#071022;vertical-align:middle;margin-left:8px;font-weight:600}
+.status{margin-top:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;color:var(--mute)}
+.status .on{color:var(--green)}.status .off{color:var(--amber)}.status .err{color:var(--red)}
+.pill{border:1px solid var(--line2);padding:3px 9px;border-radius:6px;font-size:11px;color:var(--text)}
+.pill.red{border-color:var(--red);color:var(--red)}
+.sub{margin-top:8px;color:var(--mute);font-family:var(--sans);font-size:12.5px}
+.bal{text-align:right;min-width:240px}
+.bal .v{font-size:40px;font-weight:800;letter-spacing:-1px}
+.bal .s{color:var(--mute);font-size:11px;margin-top:2px}
+.bal .w{margin-top:6px}.w .g{color:var(--green)}.w .r{color:var(--red)}
+.grid{display:grid;grid-template-columns:290px 1fr;gap:14px;padding:0 20px 20px}
+.col{display:flex;flex-direction:column;gap:12px;min-width:0}
+.card{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:12px 14px;position:relative;min-width:0}
+.card h3{margin:0;font-size:11px;letter-spacing:2px;color:var(--mute);font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.agent{display:grid;grid-template-columns:30px 1fr auto;gap:2px 10px;align-items:start}
+.agent .ic{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;font-size:15px;grid-row:span 2}
+.agent .nm{font-size:17px;font-weight:800;letter-spacing:.5px}
+.agent .ds{font-family:var(--sans);color:var(--mute);font-size:12px;grid-column:2/4;margin-top:-2px}
+.agent .rule{grid-column:1/4;margin-top:8px;font-size:12px}
+.agent .ft{grid-column:1/4;margin-top:8px;color:var(--mute);font-size:11.5px}
+.tag{font-size:10px;border:1px solid currentColor;border-radius:5px;padding:2px 6px;letter-spacing:1px;text-transform:uppercase}
+.agent.active{box-shadow:0 0 0 1px var(--c) inset,0 0 22px color-mix(in srgb,var(--c) 30%,transparent)}
+.flowtokens{display:flex;gap:8px;margin-top:12px;overflow:hidden}
+.tok{border:1px solid var(--line2);background:var(--panel2);border-radius:8px;padding:6px 10px;min-width:118px;flex:none;position:relative}
+.tok b{font-size:13px}.tok small{display:block;color:var(--mute);font-size:10.5px;margin-top:2px}
+.tok .st{position:absolute;right:7px;top:7px;width:7px;height:7px;border-radius:50%;background:var(--cyan)}
+.tok.killed{opacity:.45}.tok.killed .st{background:var(--red)}.tok.low .st{background:var(--amber)}.tok.bought{border-color:var(--green)}.tok.bought .st{background:var(--green)}
+.nodes{display:flex;justify-content:space-between;align-items:flex-start;margin:22px 6px 4px;position:relative}
+.nodes:before{content:'';position:absolute;left:30px;right:30px;top:26px;border-top:1px dashed var(--line2)}
+.node{text-align:center;position:relative;z-index:1;width:16%}
+.node .c{width:52px;height:52px;border-radius:50%;margin:0 auto;display:grid;place-items:center;font-size:20px;border:2px solid var(--c);background:color-mix(in srgb,var(--c) 18%,#0a0f25)}
+.node.on .c{box-shadow:0 0 0 5px color-mix(in srgb,var(--c) 22%,transparent),0 0 24px var(--c);animation:pulse 1.2s infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 9px color-mix(in srgb,var(--c) 10%,transparent),0 0 30px var(--c)}}
+.node .l{margin-top:6px;font-size:10.5px;letter-spacing:1.5px;color:var(--c);font-weight:600}
+.node .n{color:var(--mute);font-size:11px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.rules{margin-top:10px;display:flex;flex-direction:column;gap:7px}
+.rl{display:grid;grid-template-columns:18px 1fr auto;gap:8px;align-items:center;font-size:12px}
+.rl .i{width:16px;height:16px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:800;border:1px solid var(--line2);color:var(--dim)}
+.rl.pass .i{background:var(--green);border-color:var(--green);color:#03140b}
+.rl.fail .i{background:var(--red);border-color:var(--red);color:#22000a}
+.rl.running .i{border-color:var(--amber);color:var(--amber);animation:pulse 1s infinite;--c:var(--amber)}
+.rl.skipped,.rl.pending{color:var(--dim)}
+.rl .v{color:var(--mute);font-size:11px}.rl.fail .v{color:var(--red)}.rl.pass .v{color:var(--green)}
+.foot{margin-top:12px;border:1px solid var(--line2);border-radius:8px;padding:8px;text-align:center;color:var(--text);font-size:12px}
+.foot.ok{border-color:var(--cyan);color:var(--cyan)}.foot.bad{border-color:var(--red);color:var(--red)}
+.an{display:grid;grid-template-columns:1fr 120px;gap:12px;margin-top:10px;align-items:center}
+.bar{margin-bottom:9px}.bar .h{display:flex;justify-content:space-between;font-size:11.5px}.bar .h span:last-child{color:var(--mute)}
+.bar .t{height:4px;background:#1a2350;border-radius:4px;margin-top:4px;overflow:hidden}.bar .t i{display:block;height:100%;background:linear-gradient(90deg,#6e59ff,#a493ff);border-radius:4px;transition:width .5s}
+.bar small{color:var(--dim);font-size:10px}
+.gauge{text-align:center}.gauge svg{width:116px;height:116px}.gauge .lbl{color:var(--mute);font-size:10.5px;margin-top:4px}
+.pos{border:1px solid var(--line2);border-radius:10px;padding:10px;margin-top:10px;display:grid;grid-template-columns:1fr 210px;gap:12px}
+.pos .sym{font-size:22px;font-weight:800}
+.pos .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:11.5px;color:var(--mute);margin-top:6px}.pos .kv b{color:var(--text);font-weight:600;text-align:right}
+.pnl{font-size:24px;font-weight:800;margin-top:6px}.up{color:var(--green)}.dn{color:var(--red)}
+.btn{background:transparent;border:1px solid var(--line2);color:var(--text);border-radius:7px;padding:5px 10px;font:inherit;font-size:11px;cursor:pointer}
+.btn:hover{border-color:var(--red);color:var(--red)}
+.chart{width:100%;height:150px}
+.empty{color:var(--dim);font-size:12px;padding:20px 0;text-align:center;font-family:var(--sans)}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;margin-top:10px;font-size:12px}
+.stats .k{color:var(--mute)}.stats .vv{text-align:right}
+.logl{margin-top:8px;max-height:260px;overflow:auto;font-size:11.5px;line-height:1.55}
+.logl div{display:grid;grid-template-columns:58px 74px 1fr;gap:6px;white-space:nowrap}
+.logl div span:last-child{white-space:normal}
+.logl .tm{color:var(--dim)}.logl .error{color:var(--red)}.logl .warn{color:var(--amber)}
+.hist{margin-top:8px;font-size:11.5px;max-height:220px;overflow:auto}
+.hist div{display:grid;grid-template-columns:70px 1fr 74px 64px;gap:6px;padding:3px 0;border-bottom:1px solid #141c3d}
+.disclaimer{color:var(--dim);font-family:var(--sans);font-size:11px;text-align:center;padding:0 20px 16px}
+@media (max-width:980px){.grid{grid-template-columns:1fr}.two{grid-template-columns:1fr}.pos{grid-template-columns:1fr}.bal{text-align:left}}
+@media (max-width:600px){.win{margin:0;border-radius:0}header,.grid{padding-left:12px;padding-right:12px}.title h1{font-size:23px}.bal .v{font-size:32px}.nodes .node .c{width:40px;height:40px;font-size:16px}.nodes:before{top:20px}.an{grid-template-columns:1fr}.flowtokens{flex-wrap:nowrap;overflow-x:auto}}
+</style>
+</head>
+<body>
+<div class="win">
+  <div class="chrome">
+    <span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span>
+    <span class="t">solana-bot — sol-desk — six agents — hard handoffs</span>
+    <span id="modeBadge" class="badge">…</span>
+  </div>
+  <header>
+    <button class="orb" id="orb" title="Pause / reprise"><i><b></b><b></b></i></button>
+    <div class="title">
+      <h1><span class="a">Sol Desk</span> Terminal <span class="ver">sol-desk v1</span></h1>
+      <div class="status"><span id="run">● connexion…</span><span id="riskPill"></span></div>
+      <div class="sub">un prompt · six agents · relais stricts · aucun token choisi à la main</div>
+    </div>
+    <div class="bal">
+      <div class="v" id="bal">$—</div>
+      <div class="s" id="balSub"></div>
+      <div class="w" id="wl"></div>
+      <svg id="spark" width="260" height="34" style="max-width:100%"></svg>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="col" id="agents"></div>
+    <div class="col">
+      <div class="card">
+        <h3><span>LIVE FLOW · RELAIS STRICTS · UN RÔLE CHACUN</span><span id="ppm"></span></h3>
+        <div class="flowtokens" id="flow"></div>
+        <div class="nodes" id="nodes"></div>
+      </div>
+      <div class="two">
+        <div class="card" id="filterCard"></div>
+        <div class="card" id="analystCard"></div>
+      </div>
+      <div class="card">
+        <h3><span>EXECUTOR + RISK · POSITIONS</span><span><button class="btn" id="closeAll">tout fermer</button></span></h3>
+        <div id="positions"></div>
+      </div>
+      <div class="two">
+        <div class="card"><h3><span>STATS</span><span id="upt"></span></h3><div class="stats" id="stats"></div>
+          <h3 style="margin-top:14px"><span>DERNIERS TRADES</span></h3><div class="hist" id="hist"></div></div>
+        <div class="card"><h3><span>LOGGER · JOURNAL</span><span class="tag" style="color:var(--blue)">write</span></h3><div class="logl" id="log"></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="disclaimer">Le trading de memecoins est extrêmement risqué : la plupart des tokens vont à zéro. Commence en paper trading. Rien ici n'est un conseil financier.</div>
+</div>
+
+<script>
+const AG = {
+  scout:   {nm:'SCOUT',   ic:'⌕', c:'var(--cyan)',   ds:'trouve des paires Solana fraîches'},
+  filter:  {nm:'FILTER',  ic:'▼', c:'var(--red)',    ds:'élimine ce qui ne passe pas les règles'},
+  analyst: {nm:'ANALYST', ic:'▮', c:'var(--purple)', ds:'note ce qui reste, de 0 à 100'},
+  executor:{nm:'EXECUTOR',ic:'⚡', c:'var(--green)',  ds:'passe les ordres'},
+  risk:    {nm:'RISK',    ic:'⛨', c:'var(--amber)',  ds:'protège chaque entrée'},
+  logger:  {nm:'LOGGER',  ic:'☰', c:'var(--blue)',   ds:'écrit tout'},
+};
+const q = new URLSearchParams(location.search); const tok = q.get('token');
+const api = (p) => p + (tok ? (p.includes('?')?'&':'?') + 'token=' + encodeURIComponent(tok) : '');
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const usd = (v, d=2) => (v<0?'-':'') + '$' + Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const k = (v) => v>=1e6 ? (v/1e6).toFixed(1)+'M' : v>=1e3 ? (v/1e3).toFixed(0)+'k' : Math.round(v)+'';
+const px = (p) => !p ? '$0' : p>=1 ? '$'+p.toFixed(4) : '$'+(p.toPrecision(4).includes('e') ? p.toFixed(10) : p.toPrecision(4));
+const pct = (v) => (v>=0?'+':'') + v.toFixed(1) + '%';
+const dur = (ms) => { const s=Math.max(0,Math.floor(ms/1000)); return [Math.floor(s/3600),Math.floor(s/60)%60,s%60].map(x=>String(x).padStart(2,'0')).join(':'); };
+const hm = (t) => new Date(t).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+let S = null;
+
+function post(path){ return fetch(api(path), {method:'POST'}).catch(()=>{}); }
+$('orb').onclick = () => S && post(S.paused ? '/api/resume' : '/api/pause');
+$('closeAll').onclick = () => { if (S?.positions.length && confirm('Fermer toutes les positions maintenant ?')) post('/api/close?id=all'); };
+document.addEventListener('click', e => { const id = e.target?.dataset?.close; if (id && confirm('Fermer cette position ?')) post('/api/close?id=' + encodeURIComponent(id)); });
+
+function activeAgent(s){
+  const a = s.agents;
+  if (a.executor.status==='buy'||a.executor.status==='sell') return 'executor';
+  if (a.filter.status==='check') return 'filter';
+  if (a.analyst.status==='score') return 'analyst';
+  if (a.scout.status==='scan') return 'scout';
+  if (s.positions.length) return 'risk';
+  return null;
+}
+
+function render(s){
+  S = s;
+  const w = s.wallet, st = s.stats, a = s.agents, cfg = s.config;
+  $('modeBadge').className = 'badge ' + (s.mode==='live'?'live':'paper');
+  $('modeBadge').textContent = s.mode==='live' ? 'LIVE · argent réel' : (s.sim ? 'paper · simulation' : 'paper ✓ · live ✗');
+  $('orb').classList.toggle('paused', s.paused);
+  const running = !s.paused && !s.halted;
+  $('run').innerHTML = `<span class="${s.halted?'err':running?'on':'off'}">●</span> ${s.halted?'coupe-circuit':s.paused?'en pause':'running'} · ${dur(s.now - s.startedAt)}`;
+  const lastStop = a.risk.last;
+  $('riskPill').innerHTML = s.halted ? `<span class="pill red">${esc(s.halted)}</span>` : lastStop ? `<span class="pill">RISK · ${esc(lastStop.reason)} $${esc(lastStop.symbol)}</span>` : '';
+  $('bal').textContent = usd(w.equityUsd);
+  const pnlAll = w.equityUsd - w.startUsd;
+  $('balSub').innerHTML = `solde · départ ${usd(w.startUsd)} · <span class="${pnlAll>=0?'up':'dn'}">${pct(w.startUsd? pnlAll/w.startUsd*100 : 0)}</span>${s.mode==='live'?` · ${w.sol.toFixed(3)} SOL`:''}`;
+  $('wl').innerHTML = `${st.wins+st.losses} trades · <span class="g">${st.wins} W</span> · <span class="r">${st.losses} L</span> · ${s.positions.length} ouverte(s)`;
+  spark($('spark'), s.equityHistory.map(e=>e.v));
+
+  // Agents
+  const act = activeAgent(s);
+  const killRate = a.filter.checked ? Math.round(a.filter.killed/a.filter.checked*100) : 0;
+  const info = {
+    scout:   [`paires ${cfg.scout.minAgeMin} min–${cfg.scout.maxAgeHours} h · mcap $${k(cfg.scout.minMcap)}–$${k(cfg.scout.maxMcap)} · DexScreener`, `vus ${a.scout.seen} · retenus ${a.scout.fresh}${a.scout.lastNew?' · dernier $'+esc(a.scout.lastNew):''}`, 'var(--cyan)'],
+    filter:  ['8 règles strictes · un échec = éliminé', `vérifiés ${a.filter.checked} · éliminés ${a.filter.killed} · refus ~${killRate}%`, 'var(--red)'],
+    analyst: [`seuls les ${cfg.minScore}+ passent`, a.analyst.last ? `dernier $${esc(a.analyst.last.symbol)} ${a.analyst.last.score} ${a.analyst.last.score>=cfg.minScore?'→ executor':'→ abandonné'}` : 'en attente', 'var(--purple)'],
+    executor:[`max ${cfg.maxPositionPct}% du solde par trade · ${cfg.maxOpenPositions} positions max`, a.executor.last ? `$${esc(a.executor.last.symbol)} · ${usd(a.executor.last.sizeUsd)}` : 'aucun trade', 'var(--green)'],
+    risk:    [`stop -${cfg.stopLossPct}% posé avant l'entrée · trailing après +${cfg.trailActivatePct}%`, `stops ${a.risk.stops} · trailings ${a.risk.trails}`, 'var(--amber)'],
+    logger:  ['chaque élimination et chaque trade', `lignes ${a.logger.lines} · data/trades-*.jsonl`, 'var(--blue)'],
+  };
+  const tagOf = {scout: a.scout.status==='scan'?'scan':a.scout.status, filter: a.filter.status==='check'?'check':'idle', analyst: a.analyst.status, executor: s.mode==='live'?'live':'paper', risk: s.positions.length?'armed':'idle', logger:'write'};
+  $('agents').innerHTML = Object.entries(AG).map(([id,g]) => `
+    <div class="card agent ${act===id?'active':''}" style="--c:${g.c}">
+      <div class="ic" style="background:color-mix(in srgb,${g.c} 20%,transparent);color:${g.c}">${g.ic}</div>
+      <div class="nm" style="color:${g.c}">${g.nm}</div>
+      <span class="tag" style="color:${g.c}">${esc(tagOf[id])}</span>
+      <div class="ds">${g.ds}</div>
+      <div class="rule" style="color:${info[id][2]}">${info[id][0]}</div>
+      <div class="ft">${info[id][1]}</div>
+    </div>`).join('');
+
+  // Live flow
+  $('ppm').textContent = `${a.scout.pairsPerMin} paires/min · ${dur(s.now - s.startedAt).slice(0,5)}`;
+  $('flow').innerHTML = s.flow.length ? s.flow.slice(0,8).map(f => `
+    <div class="tok ${f.verdict||''}" title="${esc(f.why||'')}"><span class="st"></span><b>$${esc(f.symbol)}</b>
+    <small>${f.ageMin!=null ? (f.ageMin<60? Math.round(f.ageMin)+'m' : Math.round(f.ageMin/60)+'h') : '?'} · $${k(f.mcap)}${f.score!=null?' · '+f.score:''}</small></div>`).join('') : '<div class="empty">le scout cherche…</div>';
+  const counts = {scout:`${a.scout.seen} vus`, filter:`${a.filter.killed} éliminés`, analyst:`${a.analyst.scored} notés`, executor:`${a.executor.trades} trades`, risk:`${a.risk.stops} stops`, logger:`#${a.logger.lines}`};
+  $('nodes').innerHTML = Object.entries(AG).map(([id,g]) => `<div class="node ${act===id?'on':''}" style="--c:${g.c}"><div class="c" style="color:${g.c}">${g.ic}</div><div class="l">${g.nm}</div><div class="n">${counts[id]}</div></div>`).join('');
+
+  // Filter
+  const fv = s.filterView;
+  $('filterCard').innerHTML = `<h3><span>FILTER · 8 RÈGLES STRICTES</span>${fv?`<span class="tag" style="color:var(--red)">$${esc(fv.symbol)}</span>`:''}</h3>` + (fv ? `
+    <div class="rules">${fv.rules.map(r => `<div class="rl ${r.status}"><span class="i">${r.status==='pass'?'✓':r.status==='fail'?'✕':r.status==='skipped'?'–':''}</span><span>${esc(r.label)}</span><span class="v">${r.status==='skipped'?'ignorée':esc(r.value)}</span></div>`).join('')}</div>
+    <div class="foot ${fv.verdict==='pass'?'ok':fv.verdict==='killed'?'bad':''}">${fv.verdict==='pass'?`$${esc(fv.symbol)} passe → ANALYST`:fv.verdict==='killed'?`$${esc(fv.symbol)} éliminé`:`vérification $${esc(fv.symbol)} · règle ${fv.step}/8`}</div>` : '<div class="empty">aucun token en cours</div>');
+
+  // Analyst
+  const av = s.analystView;
+  $('analystCard').innerHTML = `<h3><span>ANALYST · SCORE 0–100</span>${av?`<span class="tag" style="color:var(--purple)">$${esc(av.symbol)}</span>`:''}</h3>` + (av ? `
+    <div class="an"><div>${av.factors.map(f => `<div class="bar"><div class="h"><span>${esc(f.label)}</span><span>${f.score}</span></div><div class="t"><i style="width:${f.score}%"></i></div><small>${esc(f.raw)}</small></div>`).join('')}</div>
+    <div class="gauge">${gauge(av.score, av.min)}<div class="lbl">${av.min}+ passe<br>en dessous : abandonné</div></div></div>
+    <div class="foot ${av.pass?'ok':'bad'}">${av.score} ${av.pass?'≥':'<'} ${av.min} → ${av.pass?'relais EXECUTOR':'abandonné'}</div>` : '<div class="empty">aucun score encore</div>');
+
+  // Positions
+  $('positions').innerHTML = s.positions.length ? s.positions.map(p => `
+    <div class="pos"><div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="sym">$${esc(p.symbol)}</span><button class="btn" data-close="${esc(p.id)}">fermer</button></div>
+      <span class="tag" style="color:${p.trailing?'var(--green)':'var(--cyan)'}">${p.status==='closing'?'vente…':p.trailing?'trailing actif':'ouvert · stop armé'}</span>
+      <div class="pnl ${p.pnlPct>=0?'up':'dn'}">${pct(p.pnlPct)} <span style="font-size:14px">${usd(p.pnlUsd)}</span></div>
+      <div class="kv"><span>taille</span><b>${usd(p.sizeUsd)}</b><span>entrée</span><b>${px(p.entryPrice)}</b><span>prix</span><b>${px(p.lastPrice)}</b><span>stop</span><b style="color:var(--red)">${px(p.stopPrice)} (${pct((p.stopPrice/p.entryPrice-1)*100)})</b><span>plus haut</span><b>${px(p.peakPrice)}</b><span>score / durée</span><b>${p.score} · ${dur(s.now-p.openedAt)}</b></div>
+    </div>${posChart(p, cfg)}</div>`).join('') : `<div class="empty">aucune position ouverte${s.paused?' · bot en pause':''}</div>`;
+
+  // Stats
+  const wr = st.wins+st.losses ? Math.round(st.wins/(st.wins+st.losses)*100) : 0;
+  const closed = s.closed; const best = closed.reduce((m,c)=>Math.max(m,c.pnlPct),-Infinity), worst = closed.reduce((m,c)=>Math.min(m,c.pnlPct),Infinity);
+  const rows = [['paires scannées',a.scout.seen],['retenues par le scout',a.scout.fresh],['éliminées · filter',`${a.filter.killed} (${killRate}%)`],['notées · analyst',a.analyst.scored],['≥ seuil',a.analyst.passed],['trades',st.wins+st.losses],['taux de réussite',wr+'%'],['P&L réalisé',`<span class="${st.realizedUsd>=0?'up':'dn'}">${usd(st.realizedUsd)}</span>`],['meilleur trade',closed.length?pct(best):'—'],['pire trade',closed.length?pct(worst):'—']];
+  $('stats').innerHTML = rows.map(([k,v])=>`<span class="k">${k}</span><span class="vv">${v}</span>`).join('');
+  $('upt').textContent = hm(s.now);
+  $('hist').innerHTML = closed.length ? closed.slice(0,30).map(c=>`<div><span class="tm" style="color:var(--dim)">${hm(c.closedAt).slice(0,5)}</span><span>$${esc(c.symbol)} <span style="color:var(--dim)">${esc(c.reason)}</span></span><span class="${c.pnlUsd>=0?'up':'dn'}" style="text-align:right">${usd(c.pnlUsd)}</span><span class="${c.pnlPct>=0?'up':'dn'}" style="text-align:right">${pct(c.pnlPct)}</span></div>`).join('') : '<div class="empty" style="display:block">aucun trade fermé</div>';
+  $('log').innerHTML = s.log.map(l => `<div class="${l.level}"><span class="tm">${hm(l.t)}</span><span style="color:${AG[l.agent]?.c||'var(--pink)'}">${esc(l.agent.toUpperCase())}</span><span>${esc(l.msg)}</span></div>`).join('');
+}
+
+function gauge(score, min){
+  const r=48, c=2*Math.PI*r, arc=c*0.75, val=arc*score/100, mk=0.75*min/100*360+135;
+  const col = score>=min ? 'var(--cyan)' : 'var(--amber)';
+  return `<svg viewBox="0 0 116 116"><g transform="rotate(135 58 58)"><circle cx="58" cy="58" r="${r}" fill="none" stroke="#1a2350" stroke-width="9" stroke-dasharray="${arc} ${c}" stroke-linecap="round"/>
+    <circle cx="58" cy="58" r="${r}" fill="none" stroke="${col}" stroke-width="9" stroke-dasharray="${val} ${c}" stroke-linecap="round" style="transition:stroke-dasharray .6s"/></g>
+    <line x1="58" y1="4" x2="58" y2="16" stroke="var(--amber)" stroke-width="2" transform="rotate(${mk-270} 58 58)"/>
+    <text x="58" y="66" text-anchor="middle" fill="${col}" font-size="30" font-weight="800" font-family="JetBrains Mono,monospace">${score}</text>
+    <text x="58" y="84" text-anchor="middle" fill="#7c87b5" font-size="9" font-family="JetBrains Mono,monospace">score final</text></svg>`;
+}
+
+function spark(svg, vals){
+  const W=260,H=34; if (vals.length<2){svg.innerHTML='';return;}
+  const mn=Math.min(...vals), mx=Math.max(...vals), sp=mx-mn||1;
+  const pts=vals.map((v,i)=>`${(i/(vals.length-1)*W).toFixed(1)},${(H-3-(v-mn)/sp*(H-6)).toFixed(1)}`).join(' ');
+  const col = vals[vals.length-1]>=vals[0] ? 'var(--purple)' : 'var(--red)';
+  svg.innerHTML=`<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="2"/>`;
+}
+
+function posChart(p, cfg){
+  const W=210,H=150, h=p.history.length?p.history:[{p:p.entryPrice}];
+  const trailAt = p.entryPrice*(1+cfg.trailActivatePct/100);
+  const vals = h.map(x=>x.p).concat([p.stopPrice, p.entryPrice, p.trailing? p.peakPrice : trailAt]);
+  const mn=Math.min(...vals)*0.98, mx=Math.max(...vals)*1.02, Y=v=>(H-6-(v-mn)/(mx-mn||1)*(H-14)).toFixed(1);
+  const pts=h.map((x,i)=>`${(h.length<2?0:i/(h.length-1)*(W-40)).toFixed(1)},${Y(x.p)}`).join(' ');
+  const line=(v,c,l,dash)=>`<line x1="0" x2="${W-40}" y1="${Y(v)}" y2="${Y(v)}" stroke="${c}" stroke-dasharray="${dash||'3 3'}" stroke-width="1"/><text x="${W-38}" y="${+Y(v)+3}" fill="${c}" font-size="9">${l}</text>`;
+  const up = p.lastPrice>=p.entryPrice;
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    ${p.trailing?'':line(trailAt,'var(--green)','+'+cfg.trailActivatePct+'%')}
+    ${line(p.entryPrice,'#7c87b5','entrée','2 4')}
+    ${line(p.stopPrice,'var(--red)','stop')}
+    <polyline points="${pts}" fill="none" stroke="${up?'var(--cyan)':'var(--red)'}" stroke-width="2"/></svg>`;
+}
+
+function connect(){
+  const es = new EventSource(api('/api/stream'));
+  es.onmessage = (e) => { try { render(JSON.parse(e.data)); } catch(err){ console.error(err); } };
+  es.onerror = () => { $('run').innerHTML = '<span class="err">●</span> déconnecté — reconnexion…'; };
+}
+connect();
+</script>
+</body>
+</html>
