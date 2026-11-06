@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 
 import flows
 import ict
+import macro
 
 UA = {"User-Agent": "crypto-topo/1.0", "Accept": "application/json"}
 STABLE = {"usdt", "usdc", "dai", "fdusd", "usde", "usds", "tusd", "pyusd", "usd1",
@@ -446,6 +447,9 @@ def main():
     w("Capital %.0f $ · risque %.1f %% par trade (%.0f $) · %d cryptos analysees (top %d CoinGecko avec perpetuel MEXC)"
       % (args.capital, args.risk, args.capital * args.risk / 100, len(res), args.top))
     w("")
+    w("## Score de liquidite (macro + crypto)")
+    w("@@MACRO@@")
+    w("")
     w("## Marche")
     if btc:
         w("- BTC %s $ · 24h %+.1f %% · 7j %+.1f %% · RSI J %.0f / 4h %.0f · tendance %+d/5 · funding %.3f %%"
@@ -498,16 +502,22 @@ def main():
           % (args.min_vol / 1e6, ", ".join("%s %s" % (a["setup"].split()[0], a["sym"]) for a in illiq[:20])))
     w("")
     w("## Flux institutionnels et liquidite fraiche")
+    etf5 = stab = None
     try:
         w("ETF spot US (cryptoetf.today, donnees T+1 en M$) :")
-        for line in flows.etf_lines(flows.etf_flows()):
+        fl = flows.etf_flows()
+        for line in flows.etf_lines(fl):
             w("- " + line)
+        if fl.get("BTC", {}).get("days"):
+            etf5 = sum(x["total"] or 0 for x in fl["BTC"]["days"][:5])
     except RuntimeError as e:
         w("- ETF indisponibles : %s" % e)
     try:
         w("USDT / USDC imprimes ou brules par jour (DefiLlama) :")
-        for line in flows.stable_lines(flows.stable_daily()):
+        sd = flows.stable_daily()
+        for line in flows.stable_lines(sd):
             w("- " + line)
+        stab = sum(v for _, v in sd["USDT"]) + sum(v for _, v in sd["USDC"])
     except RuntimeError as e:
         w("- Stablecoins indisponibles : %s" % e)
     w("")
@@ -570,6 +580,11 @@ def main():
     w("")
     w("_Analyse automatique a but informatif, pas un conseil en investissement. Le levier peut faire perdre plus que prevu ; aucun ordre n'est passe._")
 
+    try:
+        mtxt = "\n".join("- " + x for x in macro.lines(*macro.score(etf5, stab)))
+    except RuntimeError as e:
+        mtxt = "- Score macro indisponible : %s" % e
+    L = [mtxt if x == "@@MACRO@@" else x for x in L]
     txt = "\n".join(L)
     if args.out:
         with open(args.out, "w") as f:

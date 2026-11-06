@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import flows  # noqa: E402
 import ict  # noqa: E402
+import macro  # noqa: E402
 from topo import ema, rsi, atr, macd_hist, defillama, llama_line, fm, fm_signed  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -242,7 +243,12 @@ def cmd_check(_):
         fl = flows.etf_flows()
         etf = [l for l in flows.etf_lines(fl) if l.startswith("CEFI") or l.split(" ")[0] in syms | {"BTC"}]
         print("Flux ETF : " + " | ".join(etf))
-        print("Stablecoins : " + " | ".join(flows.stable_lines(flows.stable_daily())) + "\n")
+        sd = flows.stable_daily()
+        print("Stablecoins : " + " | ".join(flows.stable_lines(sd)))
+        etf5 = sum(x["total"] or 0 for x in fl["BTC"]["days"][:5]) if fl.get("BTC", {}).get("days") else None
+        stab = sum(v for _, v in sd["USDT"]) + sum(v for _, v in sd["USDC"])
+        ml = macro.lines(*macro.score(etf5, stab))
+        print(ml[0] + " · " + " ; ".join(x for x in ml[1:-1]) + "\n")
     except RuntimeError as e:
         print("Flux ETF / stablecoins indisponibles : %s\n" % e)
     for r in rows:
