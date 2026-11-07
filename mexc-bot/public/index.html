@@ -345,11 +345,11 @@ function render(s){
 
   const l=s.list;
   $('listTitle').textContent=l?`Liste du ${l.date.split('-').reverse().join('/')}`:'Liste du jour';
-  $('listInfo').textContent=l?`générée ${dt(l.generatedAt)} · ${l.analyzed} contrats analysés · BTC 7 j ${pct(l.btcRet7d)} · score min ${cfg.minScore} (trait sur la jauge)`:'';
+  $('listInfo').textContent=l?`générée ${dt(l.generatedAt)} · ${l.analyzed} contrats analysés · BTC 7 j ${pct(l.btcRet7d)}${l.regime?` · régime BTC ${l.regime==='long'?'▲ haussier : longs seulement':'▼ baissier : shorts seulement'}`:''} · score min ${cfg.minScore} (trait sur la jauge)`:'';
   $('longs').innerHTML=l?.longs.length?l.longs.map(c=>cand(c,'long',s)).join(''):'<div class="empty">aucun long aujourd’hui</div>';
   $('shorts').innerHTML=l?.shorts.length?l.shorts.map(c=>cand(c,'short',s)).join(''):'<div class="empty">aucun short aujourd’hui</div>';
 
-  $('riskInfo').textContent=`x${cfg.leverage} · marge ${cfg.marginPct} % · stop ${cfg.stopLossPct} % · trailing ${cfg.trailPct} % après +${cfg.trailActivatePct} % · ${s.positions.length}/${cfg.maxPositions}`;
+  $('riskInfo').textContent=`risque ${cfg.riskPerTradePct} %/trade · stop ${cfg.stopAtr} ATR · trailing ${cfg.trailR} R après +${cfg.trailActivateR} R · max ${cfg.maxHoldHours/24} j · ${s.positions.length}/${cfg.maxPositions}`;
   $('posLegend').style.display=s.positions.length?'':'none';
   const box=$('positions');
   if(!s.positions.length){box.innerHTML='<div class="empty">aucune position ouverte</div>';}
@@ -358,7 +358,7 @@ function render(s){
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="sym">${esc(p.symbol.replace('_USDT',''))} <span style="font-size:13px;color:var(--ink-2)"><span class="key" style="background:${p.side==='long'?'var(--pole-pos)':'var(--pole-neg)'}"></span> ${p.side==='long'?'▲ LONG':'▼ SHORT'} x${p.leverage}</span></span><button class="btn danger" data-close="${esc(p.id)}">fermer</button></div>
       <div class="pnl">${delta(p.pnlUsdt,signed(p.pnlUsdt))}</div>
       <div class="sub" style="font-family:var(--sans);font-size:12px;color:var(--ink-2)">${pct(p.pnlPctMargin)} de la marge</div>
-      <div class="kv"><span>marge</span><b>${usdt(p.marginUsdt)}</b><span>entrée</span><b>${fmtP(p.entryPrice)}</b><span>prix actuel</span><b>${fmtP(p.lastPrice)}</b><span>⛔ stop</span><b>${fmtP(p.stopPrice)}${p.serverStop?' · sur MEXC':''}${p.trailing?' · suiveur':''}</b><span>contrats</span><b>${p.contracts}</b><span>durée</span><b>${dur(s.now-p.openedAt)}</b></div>
+      <div class="kv"><span>marge</span><b>${usdt(p.marginUsdt)}</b><span>entrée</span><b>${fmtP(p.entryPrice)}</b><span>prix actuel</span><b>${fmtP(p.lastPrice)}</b><span>⛔ stop</span><b>${fmtP(p.stopPrice)}${p.serverStop?' · sur MEXC':''}${p.trailing?' · suiveur':''}</b><span>résultat en R</span><b>${p.rMultiple!=null?(p.rMultiple>=0?'+':'−')+nf(Math.abs(p.rMultiple),2)+' R':'—'}</b><span>contrats</span><b>${p.contracts}</b><span>durée</span><b>${dur(s.now-p.openedAt)}</b></div>
       </div><div class="chart" data-pos="${esc(p.id)}"></div></div>`).join('');
     for(const p of s.positions){
       const host=box.querySelector(`[data-pos="${CSS.escape(p.id)}"]`);

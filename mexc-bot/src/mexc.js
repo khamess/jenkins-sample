@@ -101,6 +101,23 @@ export async function getKlines(symbol, interval, count) {
   return out;
 }
 
+/** Historique long : enchaîne les requêtes (2000 bougies max par appel). */
+export async function getKlinesRange(symbol, interval, startMs, endMs = Date.now()) {
+  const sec = { Min60: 3600, Hour4: 14400, Day1: 86400 }[interval];
+  const out = new Map();
+  let end = Math.floor(endMs / 1000);
+  const start = Math.floor(startMs / 1000);
+  while (end > start) {
+    const from = Math.max(start, end - sec * 1999);
+    const d = await request('GET', `/api/v1/contract/kline/${symbol}`, { params: { interval, start: from, end } });
+    const n = d?.time?.length || 0;
+    for (let i = 0; i < n; i++) out.set(d.time[i] * 1000, { t: d.time[i] * 1000, o: +d.open[i], h: +d.high[i], l: +d.low[i], c: +d.close[i], amount: +d.amount[i] });
+    if (!n || d.time[0] <= start) break;
+    end = d.time[0] - 1;
+  }
+  return [...out.values()].sort((a, b) => a.t - b.t);
+}
+
 // ---------- Privé (clé API requise) ----------
 export const getAssets = () => request('GET', '/api/v1/private/account/assets', { signed: true });
 export const getOpenPositions = (symbol) => request('GET', '/api/v1/private/position/open_positions', { signed: true, params: symbol ? { symbol } : {} });

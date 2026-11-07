@@ -61,33 +61,44 @@ export const config = {
   morningTime: str('MORNING_TIME', '08:00'), // heure locale du PC
   minTurnoverUsdt: num('MIN_TURNOVER_USDT', 8_000_000), // volume 24 h minimum
   universeSize: num('UNIVERSE_SIZE', 60), // les N contrats crypto les plus liquides
-  listSize: num('LIST_SIZE', 5), // max par côté (long / short)
-  minScore: num('MIN_SCORE', 65),
-  minAtrPct: num('MIN_ATR_PCT', 2),
-  maxAtrPct: num('MAX_ATR_PCT', 9),
+  listSize: num('LIST_SIZE', 5),
+  btcRegime: bool('BTC_REGIME', true), // ne trader que dans le sens du BTC (vs moyenne 50 j)
+  corrBudget: num('CORR_BUDGET', 2.4), // somme des corrélations BTC autorisée par côté
   exclude: str('EXCLUDE', 'USDC_USDT,FDUSD_USDT,TUSD_USDT,USDE_USDT,DAI_USDT,PAXG_USDT,XAUT_USDT')
     .split(',')
     .map((s) => s.trim().toUpperCase())
     .filter(Boolean),
+  // Paramètres de src/strategy.js. Les filtres "qualité" sont désactivés par défaut :
+  // le backtest montre qu'ils n'apportent rien de fiable (voir README).
+  strategy: {
+    minScore: num('MIN_SCORE', 65),
+    requireAlign: bool('REQUIRE_ALIGN', false),
+    minAtrPct: num('MIN_ATR_PCT', 2),
+    maxAtrPct: num('MAX_ATR_PCT', 9),
+    minRR1: num('MIN_RR1', 0),
+    maxExtAtr: num('MAX_EXT_ATR', 99),
+    rangeEdge: num('RANGE_EDGE', 0),
+    maxStopPct: num('MAX_STOP_PCT', 99),
+  },
 
-  // --- Exécution (profil "moyen x5") ---
+  // --- Exécution ---
   autoTrade: bool('AUTO_TRADE', true), // false = attend ta validation dans le tableau de bord
-  leverage: num('LEVERAGE', 5),
-  marginPct: num('MARGIN_PCT', 5), // marge par position, en % du capital
+  leverage: num('LEVERAGE', 5), // levier maximum (la taille réelle vient du risque par trade)
+  riskPerTradePct: num('RISK_PER_TRADE_PCT', 0.75), // perte si le stop est touché, en % du capital
+  maxMarginPct: num('MAX_MARGIN_PCT', 10), // plafond de marge par position
   maxPositions: num('MAX_POSITIONS', 5),
-  maxPerSide: num('MAX_PER_SIDE', 3), // évite 5 shorts corrélés = un seul gros pari
-  entryWindowHours: num('ENTRY_WINDOW_HOURS', 8), // délai pour entrer après la liste
+  maxPerSide: num('MAX_PER_SIDE', 3),
+  entryWindowHours: num('ENTRY_WINDOW_HOURS', 8),
   maxChasePct: num('MAX_CHASE_PCT', 3), // n'entre pas si le prix est déjà parti de plus de X %
   pollSec: num('POLL_SEC', 15),
 
-  // --- Risque ---
-  stopLossPct: num('STOP_LOSS_PCT', 2.5), // % du prix (= 12,5 % de la marge à x5)
-  trailActivatePct: num('TRAIL_ACTIVATE_PCT', 4),
-  trailPct: num('TRAIL_PCT', 2),
-  takeProfitPct: num('TAKE_PROFIT_PCT', 0), // 0 = désactivé
-  maxHoldHours: num('MAX_HOLD_HOURS', 24),
-  closeOnNewList: bool('CLOSE_ON_NEW_LIST', true), // ferme ce qui n'est plus dans la nouvelle liste
-  dailyMaxLossPct: num('DAILY_MAX_LOSS_PCT', 6), // coupe-circuit
+  // --- Risque (validé par backtest, voir README) ---
+  stopAtr: num('STOP_ATR', 1.5), // stop = 1,5 × ATR journalier
+  trailActivateR: num('TRAIL_ACTIVATE_R', 1.5), // trailing activé à +1,5 R
+  trailR: num('TRAIL_R', 1), // puis suit le meilleur prix à 1 R
+  maxHoldHours: num('MAX_HOLD_HOURS', 120), // 5 jours
+  closeOnNewList: bool('CLOSE_ON_NEW_LIST', false),
+  dailyMaxLossPct: num('DAILY_MAX_LOSS_PCT', 4), // coupe-circuit
 
   paper: {
     startUsdt: num('PAPER_START_USDT', 1000),
@@ -105,9 +116,9 @@ export function validateConfig() {
     throw new Error('Mode live refusé : ajoute LIVE_CONFIRM=JE_COMPRENDS_LES_RISQUES dans .env pour confirmer que tu acceptes de perdre cet argent.');
   }
   if (c.leverage < 1 || c.leverage > 20) throw new Error('LEVERAGE doit être entre 1 et 20.');
-  if (c.marginPct <= 0 || c.marginPct > 25) throw new Error('MARGIN_PCT doit être entre 0 et 25.');
-  if (c.stopLossPct <= 0) throw new Error('STOP_LOSS_PCT doit être > 0.');
-  if (c.stopLossPct * c.leverage >= 80) throw new Error('STOP_LOSS_PCT × LEVERAGE trop grand : la liquidation arriverait avant le stop.');
+  if (c.riskPerTradePct <= 0 || c.riskPerTradePct > 3) throw new Error('RISK_PER_TRADE_PCT doit être entre 0 et 3.');
+  if (c.maxMarginPct <= 0 || c.maxMarginPct > 25) throw new Error('MAX_MARGIN_PCT doit être entre 0 et 25.');
+  if (c.stopAtr <= 0) throw new Error('STOP_ATR doit être > 0.');
   if (!/^\d{1,2}:\d{2}$/.test(c.morningTime)) throw new Error('MORNING_TIME doit être au format HH:MM.');
   if (!['127.0.0.1', 'localhost'].includes(c.dashboard.host) && !c.dashboard.token) {
     throw new Error('Tableau de bord exposé sur le réseau : définis DASHBOARD_TOKEN.');

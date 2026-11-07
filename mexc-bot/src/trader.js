@@ -97,13 +97,16 @@ export async function tryEntries(tickers) {
       markDone(cand, `prix déjà parti (${move.toFixed(1)} % depuis la liste)`);
       continue;
     }
-    if (move < -config.stopLossPct) {
+    if (move < -stopPctOf(cand)) {
       markDone(cand, `prix déjà passé sous le stop prévu (${move.toFixed(1)} %)`);
       continue;
     }
     await openPosition(cand, price);
   }
 }
+
+/** Distance du stop en % : STOP_ATR × ATR journalier du contrat (validé par backtest). */
+export const stopPctOf = (cand) => config.stopAtr * (cand.atrPct || 5);
 
 function markDone(cand, note) {
   cand.done = true;
@@ -116,9 +119,12 @@ async function openPosition(cand, price) {
   const c = contracts.get(cand.symbol);
   if (!c) return markDone(cand, 'contrat introuvable');
   const equity = await refreshEquity();
-  const margin = (equity * config.marginPct) / 100;
   const lev = Math.min(config.leverage, c.maxLeverage || config.leverage);
-  const notional = margin * lev;
+  const stopPct = stopPctOf(cand);
+  // Taille au risque : si le stop est touché, on perd RISK_PER_TRADE_PCT % du capital (hors frais),
+  // dans la limite de MAX_MARGIN_PCT % de marge.
+  const notional = Math.min((equity * config.riskPerTradePct) / stopPct, ((equity * config.maxMarginPct) / 100) * lev);
+  const margin = notional / lev;
   const cs = +c.contractSize;
   const unit = +c.volUnit || 1;
   let vol = Math.floor(notional / (price * cs) / unit) * unit;
@@ -157,7 +163,7 @@ async function openPosition(cand, price) {
       fees = entry * vol * cs * takerFee;
     }
 
-    const stop = roundPrice(c, entry * (1 + ((side === 'long' ? -1 : 1) * config.stopLossPct) / 100));
+    const stop = roundPrice(c, entry * (1 + ((side === 'long' ? -1 : 1) * stopPct) / 100));
     if (isLive()) {
       try {
         await mexc.placeStopOrder({ symbol: c.symbol, vol, isLong: side === 'long', leverage: lev, triggerPrice: stop });
@@ -181,6 +187,8 @@ async function openPosition(cand, price) {
       listDate: state.list?.date,
       score: cand.score,
       stopPrice: stop,
+      initialStop: stop,
+      riskPct: stopPct,
       serverStop,
       bestPrice: entry,
       trailing: false,
@@ -219,24 +227,25 @@ export async function managePositions(tickers) {
     }
     p.pnlUsdt = pnlOf(p, p.lastPrice);
     p.pnlPctMargin = (p.pnlUsdt / p.marginUsdt) * 100;
-    const movePct = ((p.lastPrice / p.entryPrice - 1) * 100) * (isLong(p) ? 1 : -1);
+    // R = distance initiale du stop. Trailing activé à +TRAIL_ACTIVATE_R, puis suit à TRAIL_R.
+    const riskPct = p.riskPct || Math.abs(p.initialStop / p.entryPrice - 1) * 100 || 2.5;
+    p.rMultiple = (((p.lastPrice / p.entryPrice - 1) * 100) * (isLong(p) ? 1 : -1)) / riskPct;
 
     if (isLong(p) ? p.lastPrice > p.bestPrice : p.lastPrice < p.bestPrice) p.bestPrice = p.lastPrice;
     const bestMove = ((p.bestPrice / p.entryPrice - 1) * 100) * (isLong(p) ? 1 : -1);
-    if (!p.trailing && bestMove >= config.trailActivatePct) {
+    if (!p.trailing && bestMove >= config.trailActivateR * riskPct) {
       p.trailing = true;
-      log(`${p.symbol} +${bestMove.toFixed(1)} % → trailing stop activé (${config.trailPct} % derrière le meilleur prix)`);
+      log(`${p.symbol} +${(bestMove / riskPct).toFixed(1)} R → trailing stop activé (${config.trailR} R = ${(config.trailR * riskPct).toFixed(1)} % derrière le meilleur prix)`);
     }
     if (p.trailing) {
       const c = contracts.get(p.symbol);
-      const trail = roundPrice(c, p.bestPrice * (1 + ((isLong(p) ? -1 : 1) * config.trailPct) / 100));
+      const trail = roundPrice(c, p.bestPrice * (1 + ((isLong(p) ? -1 : 1) * config.trailR * riskPct) / 100));
       if (isLong(p) ? trail > p.stopPrice : trail < p.stopPrice) p.stopPrice = trail;
       await maybeMoveServerStop(p, c);
     }
 
     let reason = null;
     if (isLong(p) ? p.lastPrice <= p.stopPrice : p.lastPrice >= p.stopPrice) reason = p.trailing ? 'trailing stop' : 'stop-loss';
-    else if (config.takeProfitPct > 0 && movePct >= config.takeProfitPct) reason = 'take-profit';
     else if (config.maxHoldHours > 0 && now - p.openedAt > config.maxHoldHours * 3600_000) reason = 'durée max';
     else if (p.forceClose) reason = p.forceClose;
     if (reason) await closePosition(p, reason);
