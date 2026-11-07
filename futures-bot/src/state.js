@@ -8,8 +8,8 @@ export const bus = new EventEmitter();
 fs.mkdirSync(config.dataDir, { recursive: true });
 fs.mkdirSync(config.listDir, { recursive: true });
 
-const STATE_FILE = path.join(config.dataDir, `state-${config.mode}.json`);
-const TRADES_FILE = path.join(config.dataDir, `trades-${config.mode}.csv`);
+const STATE_FILE = path.join(config.dataDir, `state-${config.exchange}-${config.mode}.json`);
+const TRADES_FILE = path.join(config.dataDir, `trades-${config.exchange}-${config.mode}.csv`);
 const LOG_FILE = path.join(config.dataDir, 'bot.log');
 
 export const state = {
@@ -91,7 +91,7 @@ export function log(msg, level = 'info') {
 }
 
 export function recordTrade(t) {
-  const header = 'date_ouverture;date_fermeture;symbole;sens;levier;marge_usdt;prix_entree;prix_sortie;pnl_usdt;pnl_pct_marge;frais_usdt;raison;mode\n';
+  const header = 'date_ouverture;date_fermeture;symbole;sens;levier;marge;prix_entree;prix_sortie;pnl;pnl_pct_marge;frais;raison;plateforme;mode\n';
   const row = [
     new Date(t.openedAt).toISOString(),
     new Date(t.closedAt).toISOString(),
@@ -105,6 +105,7 @@ export function recordTrade(t) {
     t.pnlPctMargin.toFixed(2),
     t.feesUsdt.toFixed(4),
     t.reason,
+    config.exchange,
     config.mode,
   ].join(';');
   const exists = fs.existsSync(TRADES_FILE);
@@ -121,6 +122,8 @@ export function snapshot() {
     now: Date.now(),
     startedAt: state.startedAt,
     mode: state.mode,
+    exchange: config.exchange === 'mexc' ? 'MEXC' : 'OKX',
+    quote: config.exchange === 'mexc' ? 'USDT' : 'USD',
     paused: state.paused,
     halted: state.halted,
     status: state.status,

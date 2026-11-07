@@ -1,7 +1,7 @@
 {
-  "name": "mexc-futures-bot",
+  "name": "futures-bot",
   "version": "1.0.0",
-  "description": "Bot autonome MEXC Futures : liste long/short générée chaque matin, exécution et gestion du risque.",
+  "description": "Bot Futures autonome (OKX X-Perps ou MEXC) : liste long/short chaque matin, exécution, gestion du risque et backtest.",
   "type": "module",
   "private": true,
   "engines": {

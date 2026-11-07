@@ -72,6 +72,7 @@ function correlation(a, b) {
  */
 export function analyze(symbol, d, f, price, fundingPct, btcD, params = DEFAULT_PARAMS) {
   const P = { ...DEFAULT_PARAMS, ...params };
+  const isBtc = P.isBtc ?? /^BTC[-_]/.test(symbol);
   if (d.length < 60 || f.length < 60) return null;
   const dc = d.map((k) => k.c);
   const fc = f.map((k) => k.c);
@@ -89,10 +90,10 @@ export function analyze(symbol, d, f, price, fundingPct, btcD, params = DEFAULT_
   const ret7 = (last(dc) / dc[dc.length - 8] - 1) * 100;
   const btcC = btcD.map((k) => k.c);
   const btcRet7 = btcC.length > 8 ? (last(btcC) / btcC[btcC.length - 8] - 1) * 100 : 0;
-  const rs = symbol === 'BTC_USDT' ? 0 : ret7 - btcRet7;
+  const rs = isBtc ? 0 : ret7 - btcRet7;
   const avgAmt = d.slice(-21, -1).reduce((s, k) => s + k.amount, 0) / 20;
   const volRatio = avgAmt > 0 ? last(d).amount / avgAmt : 1;
-  const corr = symbol === 'BTC_USDT' ? 1 : correlation(logRets(dc.slice(-31)), logRets(btcC.slice(-31)));
+  const corr = isBtc ? 1 : correlation(logRets(dc.slice(-31)), logRets(btcC.slice(-31)));
 
   // ----- score long / short (0-100) -----
   const L = { trendD: 0, trend4h: 0, momentum: 0, rs: 0, volume: 0, funding: 0 };
@@ -104,8 +105,8 @@ export function analyze(symbol, d, f, price, fundingPct, btcD, params = DEFAULT_
   (f20 > f50 ? L : S).trend4h += 10;
   L.momentum = rD >= 50 && rD <= 68 ? 20 : rD > 68 && rD <= 75 ? 10 : rD >= 45 && rD < 50 ? 8 : 0;
   S.momentum = rD >= 32 && rD <= 50 ? 20 : rD >= 25 && rD < 32 ? 10 : rD > 50 && rD <= 55 ? 8 : 0;
-  L.rs = symbol === 'BTC_USDT' ? 7.5 : lin(rs, -10, 10, 15);
-  S.rs = symbol === 'BTC_USDT' ? 7.5 : lin(-rs, -10, 10, 15);
+  L.rs = isBtc ? 7.5 : lin(rs, -10, 10, 15);
+  S.rs = isBtc ? 7.5 : lin(-rs, -10, 10, 15);
   const vScore = lin(volRatio, 0.8, 2, 10);
   (last(dc) >= dc[dc.length - 2] ? L : S).volume = vScore;
   L.funding = lin(-fundingPct, -0.05, -0.01, 10);

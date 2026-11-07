@@ -1,4 +1,5 @@
-// BACKTEST — rejoue la stratégie sur l'historique MEXC pour comparer des réglages.
+// BACKTEST — rejoue la stratégie sur l'historique de la plateforme (EXCHANGE) pour comparer des réglages.
+// Sur OKX, l'historique vient des perpétuels USDT (même sous-jacent, historique plus long que les X-Perps).
 //   node src/backtest.js [--days=180] [--hour=6] [--top=35] [--refresh]
 // Chaque matin (heure UTC --hour) : liste calculée avec les SEULES bougies clôturées à cet instant,
 // entrée à l'ouverture de la bougie 1 h suivante, gestion bougie 1 h par bougie 1 h, frais + slippage.
@@ -7,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
-import * as mexc from './mexc.js';
+import { ex } from './exchange.js';
 import { analyze, selectCandidates, DEFAULT_PARAMS } from './strategy.js';
 import { buildUniverse } from './screener.js';
 
@@ -21,12 +22,12 @@ const CACHE = path.join(config.dataDir, 'cache');
 fs.mkdirSync(CACHE, { recursive: true });
 
 async function cached(symbol, interval, startMs) {
-  const file = path.join(CACHE, `${symbol}-${interval}.json`);
+  const file = path.join(CACHE, `${ex.name}-${symbol}-${interval}.json`);
   if (!args.refresh && fs.existsSync(file)) {
     const c = JSON.parse(fs.readFileSync(file, 'utf8'));
     if (c.startMs <= startMs && Date.now() - c.at < 12 * 3600_000) return c.data;
   }
-  const data = await mexc.getKlinesRange(symbol, interval, startMs);
+  const data = await ex.getKlinesRange(symbol, interval, startMs);
   fs.writeFileSync(file, JSON.stringify({ at: Date.now(), startMs, data }));
   return data;
 }
@@ -45,27 +46,31 @@ function closedBefore(arr, T, len) {
 
 export async function loadData() {
   const { universe } = await buildUniverse({ exclure: [], forcerLong: [], forcerShort: [] });
-  const syms = universe.slice(0, TOP).map((u) => u.contract.symbol);
-  if (!syms.includes('BTC_USDT')) syms.push('BTC_USDT');
+  const list = universe.slice(0, TOP).map((u) => u.contract);
+  const btc = ex.btcSymbol();
+  if (!list.some((c) => c.symbol === btc)) list.push((await ex.getContracts()).find((c) => c.symbol === btc));
   const now = Date.now();
   const start = Math.floor((now - (DAYS + SKIP) * DAY) / DAY) * DAY;
   const data = {};
   let i = 0;
-  for (const s of syms) {
+  for (const c of list) {
     i++;
-    process.stdout.write(`\r  historique ${i}/${syms.length} ${s.padEnd(16)}`);
+    process.stdout.write(`\r  historique ${i}/${list.length} ${c.display.padEnd(10)}`);
     try {
-      data[s] = {
-        d: await cached(s, 'Day1', start - 260 * DAY),
-        f: await cached(s, 'Hour4', start - 40 * DAY),
-        h: await cached(s, 'Min60', start - 2 * DAY),
+      const h = c.histSymbol;
+      data[c.symbol] = {
+        d: await cached(h, '1D', start - 260 * DAY),
+        f: await cached(h, '4H', start - 40 * DAY),
+        h: await cached(h, '1H', start - 2 * DAY),
       };
+      if (data[c.symbol].h.length < 48) throw new Error('historique insuffisant');
     } catch (e) {
-      console.log(`\n  ${s} ignoré : ${e.message}`);
+      delete data[c.symbol];
+      console.log(`\n  ${c.display} ignoré : ${e.message}`);
     }
   }
   console.log('');
-  return { data, start, syms: Object.keys(data) };
+  return { data, start, syms: Object.keys(data), btc };
 }
 
 function simulate(trade, bars, V) {
@@ -131,7 +136,7 @@ function simulate(trade, bars, V) {
 
 export function runVariant(D, V) {
   const P = { ...DEFAULT_PARAMS, ...V.params };
-  const btc = D.data.BTC_USDT;
+  const btc = D.data[D.btc];
   const days = [];
   const trades = [];
   const open = []; // positions en cours : { symbol, side, exitT, pnl }
@@ -163,7 +168,7 @@ export function runVariant(D, V) {
       const d = x.d.slice(Math.max(0, nd - 250), nd);
       const f = x.f.slice(Math.max(0, nf - 150), nf);
       const price = x.h[nh - 1].c;
-      const a = analyze(s, d, f, price, 0, btcD.slice(-60), P);
+      const a = analyze(s, d, f, price, 0, btcD.slice(-60), { ...P, isBtc: s === D.btc });
       if (!a) continue;
       if (V.btcRegime && regime && a.side !== regime) continue;
       if (V.invert) a.side = a.side === 'long' ? 'short' : 'long';
@@ -217,8 +222,9 @@ export function runVariant(D, V) {
 
 // ---------- Variantes comparées ----------
 const BASE = {
-  feePct: 0.04,
-  slipPct: 0.05,
+  // OKX X-Perps : moins liquides → frais et slippage plus prudents
+  feePct: ex.name === 'okx' ? 0.05 : 0.04,
+  slipPct: ex.name === 'okx' ? 0.1 : 0.05,
   leverage: 5,
   marginPct: 5,
   maxMarginPct: 10,
@@ -289,7 +295,7 @@ export const ROBUST = [
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
-  console.log(`Backtest ${DAYS} jours${SKIP ? ` (hors échantillon : se termine ${SKIP} j avant aujourd'hui)` : ''} · liste à ${HOUR}h UTC · top ${TOP} contrats`);
+  console.log(`Backtest ${ex.label} · ${DAYS} jours${SKIP ? ` (hors échantillon : se termine ${SKIP} j avant aujourd'hui)` : ''} · liste à ${HOUR}h UTC · top ${TOP} contrats`);
   const D = await loadData();
   const pct = (v) => (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + ' %';
   const results = (args.set === 'robust' ? ROBUST : VARIANTS).map((V) => runVariant(D, V));

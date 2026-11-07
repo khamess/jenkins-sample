@@ -8,12 +8,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from './config.js';
-import * as mexc from './mexc.js';
+import { ex, baseOf } from './exchange.js';
 import { last } from './indicators.js';
 import { analyze, selectCandidates } from './strategy.js';
 import { log, today } from './state.js';
-
-const STABLES = new Set(['USDC', 'USDT', 'FDUSD', 'TUSD', 'USDE', 'DAI', 'USD1', 'PYUSD', 'USDD', 'BUSD']);
 
 function readManual() {
   const file = path.join(config.listDir, 'manuel.json');
@@ -21,17 +19,13 @@ function readManual() {
   if (!fs.existsSync(file)) {
     fs.writeFileSync(
       file,
-      JSON.stringify(
-        { _aide: 'Symboles au format BTC_USDT. exclure = jamais tradé ; forcerLong / forcerShort = ajouté à la liste même avec un score faible.', ...empty },
-        null,
-        2
-      )
+      JSON.stringify({ _aide: 'Noms de cryptos (ex. "SOL", "BTC"). exclure = jamais tradé ; forcerLong / forcerShort = ajouté à la liste même avec un score faible.', ...empty }, null, 2)
     );
     return empty;
   }
   try {
     const m = JSON.parse(fs.readFileSync(file, 'utf8'));
-    const norm = (a) => (Array.isArray(a) ? a.map((s) => String(s).toUpperCase().trim()) : []);
+    const norm = (a) => (Array.isArray(a) ? a.map(baseOf) : []); // accepte "SOL", "SOL_USDT", "SOL-USDT"…
     return { exclure: norm(m.exclure), forcerLong: norm(m.forcerLong), forcerShort: norm(m.forcerShort) };
   } catch (e) {
     log(`manuel.json illisible (${e.message}), ignoré`, 'warn');
@@ -39,36 +33,23 @@ function readManual() {
   }
 }
 
-/** Univers : contrats perpétuels crypto en USDT, ouverts à l'API, triés par volume 24 h. */
+const defaultTurnover = () => config.minTurnoverUsdt || (ex.name === 'okx' ? 500_000 : 8_000_000);
+
+/** Univers : contrats crypto de la plateforme, triés par volume 24 h. */
 export async function buildUniverse(manual) {
-  const [contracts, tickers] = await Promise.all([mexc.getContracts(), mexc.getTickers()]);
-  const tick = new Map(tickers.map((t) => [t.symbol, t]));
+  const [contracts, tickers] = await Promise.all([ex.getContracts(), ex.getTickers()]);
+  const excluded = new Set([...config.exclude.map(baseOf), ...manual.exclure]);
+  const forcedBases = new Set([...manual.forcerLong, ...manual.forcerShort]);
   const out = [];
   for (const c of contracts) {
-    const t = tick.get(c.symbol);
-    if (!t) continue;
-    const plates = (c.conceptPlate || []).map((p) => String(p).toLowerCase());
-    const isTradfi = plates.some((p) => p.includes('tradfi') || p.includes('stock') || p.includes('forex') || p.includes('commodit') || p.includes('metal'));
-    if (
-      c.quoteCoin !== 'USDT' ||
-      c.settleCoin !== 'USDT' ||
-      c.state !== 0 ||
-      c.apiAllowed === false ||
-      c.isHidden ||
-      c.preMarket ||
-      isTradfi ||
-      STABLES.has(c.baseCoin) ||
-      config.exclude.includes(c.symbol) ||
-      manual.exclure.includes(c.symbol)
-    )
-      continue;
-    if (+t.amount24 < config.minTurnoverUsdt && !manual.forcerLong.includes(c.symbol) && !manual.forcerShort.includes(c.symbol)) continue;
+    const t = tickers.get(c.symbol);
+    if (!t || excluded.has(c.base)) continue;
+    if (t.turnover24 < defaultTurnover() && !forcedBases.has(c.base)) continue;
     out.push({ contract: c, ticker: t });
   }
-  out.sort((a, b) => b.ticker.amount24 - a.ticker.amount24);
-  const forced = out.filter((x) => manual.forcerLong.includes(x.contract.symbol) || manual.forcerShort.includes(x.contract.symbol));
+  out.sort((x, y) => y.ticker.turnover24 - x.ticker.turnover24);
   const top = out.slice(0, config.universeSize);
-  for (const f of forced) if (!top.includes(f)) top.push(f);
+  for (const f of out) if (forcedBases.has(f.contract.base) && !top.includes(f)) top.push(f);
   return { universe: top, contracts: new Map(contracts.map((c) => [c.symbol, c])) };
 }
 
@@ -84,11 +65,13 @@ export function btcRegime(btcClosed) {
 export async function generateList(onProgress = () => {}) {
   const manual = readManual();
   const { universe } = await buildUniverse(manual);
-  log(`Liste du matin : analyse de ${universe.length} contrats crypto MEXC…`);
+  log(`Liste du matin : analyse de ${universe.length} contrats crypto ${ex.label}…`);
 
   const now = Date.now();
   const closedD = (k) => k.filter((x) => x.t + 86_400_000 <= now);
-  const btcD = closedD(await mexc.getKlines('BTC_USDT', 'Day1', 260));
+  const btcSym = ex.btcSymbol();
+  if (!btcSym) throw new Error(`contrat BTC introuvable sur ${ex.label}`);
+  const btcD = closedD(await ex.getKlines(btcSym, '1D', 260));
   const regime = config.btcRegime ? btcRegime(btcD) : null;
   const btcRet7 = (last(btcD).c / btcD[btcD.length - 8].c - 1) * 100;
   if (regime) log(`Régime BTC : ${regime.side === 'long' ? 'HAUSSIER' : 'BAISSIER'} (BTC ${Math.round(regime.price)} vs moyenne 50 j ${Math.round(regime.sma50)}) → seulement des ${regime.side === 'long' ? 'LONGS' : 'SHORTS'}`);
@@ -100,14 +83,17 @@ export async function generateList(onProgress = () => {}) {
     i++;
     onProgress(i, universe.length, contract.symbol);
     try {
-      const d = closedD(await mexc.getKlines(contract.symbol, 'Day1', 260));
-      const f = (await mexc.getKlines(contract.symbol, 'Hour4', 150)).filter((x) => x.t + 14_400_000 <= now);
-      const a = analyze(contract.symbol, d, f, +ticker.lastPrice, +ticker.fundingRate * 100, btcD.slice(-60), params);
+      const d = closedD(await ex.getKlines(contract.symbol, '1D', 260));
+      const f = (await ex.getKlines(contract.symbol, '4H', 150)).filter((x) => x.t + 14_400_000 <= now);
+      const funding = ticker.fundingPct ?? (await ex.getFundingPct(contract.symbol));
+      const a = analyze(contract.symbol, d, f, ticker.last, funding, btcD.slice(-60), { ...params, isBtc: contract.base === 'BTC' });
       if (!a) continue;
-      a.turnover24 = +ticker.amount24;
+      a.turnover24 = ticker.turnover24;
+      a.base = contract.base;
+      a.display = contract.display;
       // Le bot utilise un stop ATR (validé par backtest), pas le stop structurel de l'analyse.
       a.why = a.why.filter((w) => !w.startsWith('stop ')).concat(`stop ${(config.stopAtr * a.atrPct).toFixed(1)} % (${config.stopAtr} ATR)`);
-      if (regime && a.side !== regime.side && !manual.forcerLong.includes(a.symbol) && !manual.forcerShort.includes(a.symbol)) {
+      if (regime && a.side !== regime.side && !manual.forcerLong.includes(a.base) && !manual.forcerShort.includes(a.base)) {
         a.ok = false;
         a.rejects.push(`contre le régime BTC (${regime.side})`);
       }
@@ -119,8 +105,8 @@ export async function generateList(onProgress = () => {}) {
 
   // Forçages manuels
   for (const r of results) {
-    if (manual.forcerLong.includes(r.symbol) || manual.forcerShort.includes(r.symbol)) {
-      r.side = manual.forcerLong.includes(r.symbol) ? 'long' : 'short';
+    if (manual.forcerLong.includes(r.base) || manual.forcerShort.includes(r.base)) {
+      r.side = manual.forcerLong.includes(r.base) ? 'long' : 'short';
       r.forced = true;
       r.ok = true;
     }
@@ -139,6 +125,7 @@ export async function generateList(onProgress = () => {}) {
     generatedAt: Date.now(),
     btcRet7d: +btcRet7.toFixed(2),
     regime: regime ? regime.side : null,
+    exchange: ex.label,
     analyzed: results.length,
     longs,
     shorts,
@@ -149,7 +136,7 @@ export async function generateList(onProgress = () => {}) {
       .map((r) => ({ symbol: r.symbol, side: r.side, score: r.score, why: r.rejects.join(', ') || 'liste pleine / budget corrélation' })),
   };
   writeList(list);
-  log(`Liste du ${list.date} : ${longs.length} LONG (${longs.map((x) => x.symbol).join(', ') || '—'}) · ${shorts.length} SHORT (${shorts.map((x) => x.symbol).join(', ') || '—'})`);
+  log(`Liste du ${list.date} (${ex.label}) : ${longs.length} LONG (${longs.map((x) => x.display).join(', ') || '—'}) · ${shorts.length} SHORT (${shorts.map((x) => x.display).join(', ') || '—'})`);
   return list;
 }
 

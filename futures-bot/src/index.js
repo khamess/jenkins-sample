@@ -1,9 +1,9 @@
-// Bot MEXC Futures autonome.
+// Bot Futures autonome (OKX X-Perps ou MEXC, voir EXCHANGE dans .env).
 //   Chaque matin (MORNING_TIME) : génère la liste LONG / SHORT, ferme ce qui n'y est plus.
 //   En continu (POLL_SEC) : ouvre les positions de la liste, surveille stop / trailing / durée.
 import { config, validateConfig } from './config.js';
 import { state, log, load, save, changed, today } from './state.js';
-import * as mexc from './mexc.js';
+import { ex } from './exchange.js';
 import { generateList } from './screener.js';
 import { initTrader, tryEntries, managePositions, closeWhere, refreshEquity, loadContracts } from './trader.js';
 import { startServer } from './server.js';
@@ -58,7 +58,7 @@ async function tick() {
   if (ticking || scanning) return;
   ticking = true;
   try {
-    const tickers = new Map((await mexc.getTickers()).map((t) => [t.symbol, t]));
+    const tickers = await ex.getTickers();
     await managePositions(tickers);
     await tryEntries(tickers);
     state.status = state.paused ? 'en pause' : state.halted ? 'coupe-circuit' : 'en marche';
@@ -89,15 +89,15 @@ async function equityPoint() {
 }
 
 async function testApi() {
-  console.log('Test de connexion à MEXC…');
-  const offset = await mexc.syncTime();
-  console.log(`  ✓ API publique OK (décalage horloge ${offset} ms)`);
-  const b = await mexc.getUsdtBalance();
-  console.log(`  ✓ Clé API OK — compte Futures : ${b.equity.toFixed(2)} USDT (disponible ${b.available.toFixed(2)})`);
-  const pos = await mexc.getOpenPositions();
-  console.log(`  ✓ Positions ouvertes : ${(pos || []).length}`);
-  const mode = await mexc.getPositionMode().catch(() => null);
-  console.log(`  ✓ Mode de position : ${mode === 1 ? 'hedge' : mode === 2 ? 'one-way' : 'inconnu'}`);
+  console.log(`Test de connexion à ${ex.label}${config.exchange === 'okx' ? ` (${config.okx.baseUrl}${config.okx.demo ? ', compte DÉMO' : ''})` : ''}…`);
+  const contracts = await ex.getContracts();
+  console.log(`  ✓ API publique OK — ${contracts.length} contrats crypto disponibles`);
+  const info = await ex.init();
+  console.log(`  ✓ Clé API OK — décalage horloge ${info.offset} ms · ${info.notes.join(' · ')}`);
+  const b = await ex.getBalance();
+  console.log(`  ✓ Solde : ${b.equity.toFixed(2)} ${ex.quote} (disponible ${b.available.toFixed(2)})`);
+  const pos = await ex.getPositions();
+  console.log(`  ✓ Positions ouvertes : ${pos.length}`);
   console.log('Tout est prêt. Aucun ordre n’a été passé.');
 }
 
@@ -114,7 +114,7 @@ async function main() {
       await testApi();
       process.exit(0);
     } catch (e) {
-      console.error(`\nÉchec : ${e.message}\n\nVérifie la clé, le secret, la permission "Futures / Trade" et la liste d'IP autorisées de la clé.\n`);
+      console.error(`\nÉchec : ${e.message}\n\nVérifie la clé, le secret${config.exchange === 'okx' ? ', la passphrase' : ''}, la permission de trading et la liste d'IP autorisées de la clé.\n`);
       process.exit(1);
     }
   }
@@ -134,10 +134,10 @@ async function main() {
   try {
     await initTrader();
   } catch (e) {
-    console.error(`\nConnexion à MEXC impossible : ${e.message}\n`);
+    console.error(`\nConnexion à ${ex.label} impossible : ${e.message}\n`);
     process.exit(1);
   }
-  log(`Bot démarré en mode ${config.mode.toUpperCase()}${config.mode === 'paper' ? ' (argent fictif, vrais prix MEXC)' : ' — ARGENT RÉEL'} · capital ${state.wallet.equityUsdt.toFixed(2)} USDT`);
+  log(`Bot démarré sur ${ex.label} en mode ${config.mode.toUpperCase()}${config.mode === 'paper' ? ` (argent fictif, vrais prix ${ex.label})` : ' — ARGENT RÉEL'} · capital ${state.wallet.equityUsdt.toFixed(2)} ${ex.quote}`);
   if (restored) log(`État restauré : ${state.positions.length} position(s) ouverte(s)`);
 
   startServer({ runMorning });
@@ -150,7 +150,7 @@ async function main() {
   setInterval(equityPoint, 5 * 60_000);
 
   const stop = () => {
-    console.log('\nArrêt. Les positions restent ouvertes sur MEXC avec leur stop serveur ; elles seront reprises au prochain démarrage.');
+    console.log(`\nArrêt. Les positions restent ouvertes chez ${ex.label} avec leur stop ; elles seront reprises au prochain démarrage.`);
     save();
     setTimeout(() => process.exit(0), 200);
   };

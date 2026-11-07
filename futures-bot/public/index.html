@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MEXC Desk</title>
+<title>Futures Desk</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
 /* Jetons : toute couleur passe par un rôle. Couleurs des données validées
@@ -106,11 +106,11 @@ td.num{text-align:right;font-variant-numeric:tabular-nums}
 <body>
 <div class="win">
   <div class="chrome"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span>
-    <span class="t">mexc-desk — futures USDT — liste du matin — long / short</span><span id="mode" class="badge">…</span></div>
+    <span class="t">futures-desk — liste du matin — long / short</span><span id="mode" class="badge">…</span></div>
   <header>
     <button class="orb" id="orb" title="Pause / reprise" aria-label="Pause ou reprise du bot"><i><b></b><b></b></i></button>
     <div class="title">
-      <h1><span class="a">MEXC</span> Desk</h1>
+      <h1><span class="a" id="exName">OKX</span> Desk</h1>
       <div class="status"><span id="run">connexion…</span><span id="next"></span><span id="halt"></span></div>
       <div class="actions">
         <button class="btn" id="rescan">↻ régénérer la liste</button>
@@ -125,7 +125,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums}
     <div class="tiles" id="tiles"></div>
 
     <div class="card">
-      <div class="head"><div><h2>Évolution du capital</h2><div class="sub" id="eqSub">USDT, un point toutes les 5 minutes</div></div></div>
+      <div class="head"><div><h2>Évolution du capital</h2><div class="sub" id="eqSub">un point toutes les 5 minutes</div></div></div>
       <div class="chart" id="eqChart"></div>
       <details class="tv"><summary>voir en tableau</summary><div class="scroll"><table id="eqTable"></table></div></details>
     </div>
@@ -145,7 +145,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums}
     </div>
 
     <div class="card">
-      <div class="head"><div><h2>Résultat par trade</h2><div class="sub">USDT net de frais, du plus ancien au plus récent</div></div>
+      <div class="head"><div><h2>Résultat par trade</h2><div class="sub">net de frais, du plus ancien au plus récent</div></div>
         <div class="legend"><span><i class="key" style="background:var(--pole-pos)"></i>▲ gain</span><span><i class="key" style="background:var(--pole-neg)"></i>▼ perte</span></div></div>
       <div class="chart" id="pnlChart"></div>
       <details class="tv" open><summary>trades fermés en tableau</summary><div class="scroll"><table id="closed"></table></div></details>
@@ -163,8 +163,9 @@ const api=p=>p+(tok?(p.includes('?')?'&':'?')+'token='+encodeURIComponent(tok):'
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const nf=(v,d=2)=>v.toLocaleString('fr-FR',{minimumFractionDigits:d,maximumFractionDigits:d});
-const usdt=(v,d=2)=>(v<0?'−':'')+nf(Math.abs(v),d)+' USDT';
-const signed=(v,d=2,u=' USDT')=>(v>=0?'+':'−')+nf(Math.abs(v),d)+u;
+const Q=()=>S?.quote||'USD';
+const usdt=(v,d=2)=>(v<0?'−':'')+nf(Math.abs(v),d)+' '+Q();
+const signed=(v,d=2,u=' '+Q())=>(v>=0?'+':'−')+nf(Math.abs(v),d)+u;
 const pct=v=>(v>=0?'+':'−')+nf(Math.abs(v),2)+' %';
 const delta=(v,txt)=>`<span class="delta ${v>=0?'up':'dn'}">${v>=0?'▲':'▼'} ${txt}</span>`;
 const dt=t=>new Date(t).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
@@ -270,7 +271,7 @@ function pnlBars(host,trades){
   const m={l:Math.max(...ticks.map(t=>fy(t).length))*6.3+10,r:8,t:8,b:22};
   const iw=W-m.l-m.r,ih=H-m.t-m.b,Y=v=>m.t+ih-(v-y0)/(y1-y0||1)*ih,zero=Y(0);
   const band=iw/trades.length,bw=Math.max(2,Math.min(24,band-2));
-  const svg=el('svg',{viewBox:`0 0 ${W} ${H}`,height:H,role:'img','aria-label':'Résultat par trade en USDT'},host);
+  const svg=el('svg',{viewBox:`0 0 ${W} ${H}`,height:H,role:'img','aria-label':'Résultat par trade en '+Q()},host);
   for(const t of ticks){el('line',{x1:m.l,x2:m.l+iw,y1:Y(t),y2:Y(t),stroke:t===0?css('--axis'):css('--grid'),'stroke-width':1},svg);
     const tx=el('text',{x:m.l-8,y:Y(t)+3.5,'text-anchor':'end',class:'tick'},svg);tx.textContent=fy(t);}
   const first=el('text',{x:m.l,y:H-6,class:'tick'},svg);first.textContent=dt(trades[0].closedAt);
@@ -285,7 +286,7 @@ function pnlBars(host,trades){
     const bar=el('path',{d:h<0.5?`M${x},${zero-0.5}h${bw}v1h${-bw}Z`:d,fill:pos?css('--pole-pos'):css('--pole-neg')},g);
     el('rect',{x:m.l+band*i,y:m.t,width:band,height:ih,fill:'transparent'},g); // cible > marque
     const rows=()=>[{label:'résultat',value:signed(v)},{label:'% de la marge',value:pct(t.pnlPctMargin)},{label:'sens',value:`${t.side} x${t.leverage}`},{label:'sortie',value:t.reason}];
-    const on=(cx,cy)=>{bar.setAttribute('fill-opacity','0.75');const b=svg.getBoundingClientRect();showTip(cx??b.left+(x+bw/2)*b.width/W,b.top+Math.min(top,bot,zero)*b.height/H-4,`${t.symbol} · ${dt(t.closedAt)}`,rows());};
+    const on=(cx,cy)=>{bar.setAttribute('fill-opacity','0.75');const b=svg.getBoundingClientRect();showTip(cx??b.left+(x+bw/2)*b.width/W,b.top+Math.min(top,bot,zero)*b.height/H-4,`${t.display||t.symbol} · ${dt(t.closedAt)}`,rows());};
     const off=()=>{bar.removeAttribute('fill-opacity');hideTip();};
     g.addEventListener('pointermove',e=>on(e.clientX));g.addEventListener('pointerleave',off);
     g.addEventListener('focus',()=>on());g.addEventListener('blur',off);
@@ -305,7 +306,7 @@ function cand(c,side,s){
   const col=side==='long'?'var(--pole-pos)':'var(--pole-neg)';
   const held=s.positions.find(p=>p.symbol===c.symbol);
   const note=held?'<span class="sdot" style="background:var(--good)"></span>position ouverte':esc(c.note||'en attente d’entrée');
-  return `<div class="cand"><div class="top"><span class="sym">${esc(c.symbol.replace('_USDT',''))}<span style="color:var(--dim);font-size:11px">/USDT${c.forced?' · forcé':''}</span></span>
+  return `<div class="cand"><div class="top"><span class="sym">${esc((c.display||c.base||c.symbol))}<span style="color:var(--dim);font-size:11px">${c.forced?' · forcé':''}</span></span>
   ${!c.done&&!held?`<button class="btn" data-skip="${esc(c.symbol)}">retirer</button>`:''}</div>
   <div class="meter" title="score ${c.score}/100, seuil ${s.config.minScore}"><span class="n">${c.score}</span>
    <span class="track" style="background:color-mix(in srgb,${col} 18%,transparent)"><span class="fill" style="width:${c.score}%;background:${col}"></span><span class="thr" style="left:${s.config.minScore}%"></span></span></div>
@@ -315,8 +316,9 @@ function cand(c,side,s){
 
 function render(s){
   S=s;const w=s.wallet,st=s.stats,cfg=s.config;
-  $('mode').className='badge '+(s.mode==='live'?'live':'paper');$('mode').textContent=s.mode==='live'?'⚠ LIVE · argent réel':'PAPER · argent fictif';
+  $('mode').className='badge '+(s.mode==='live'?'live':'paper');$('mode').textContent=`${s.exchange} · `+(s.mode==='live'?'⚠ LIVE · argent réel':'PAPER · argent fictif');
   $('orb').classList.toggle('paused',s.paused);
+  $('exName').textContent=s.exchange;
   const sc=s.halted?'--critical':s.paused?'--warning':'--good';
   $('run').innerHTML=`<span class="sdot" style="background:var(${sc})"></span>${esc(s.status)}`;
   $('next').innerHTML=s.nextScanAt?`<span class="pill">prochaine liste ${dt(s.nextScanAt)}</span>`:'';
@@ -337,9 +339,9 @@ function render(s){
 
   // Capital : historique + point courant
   const eqPts=s.equityHistory.map(e=>({t:e.t,v:e.v}));eqPts.push({t:s.now,v:+w.equityUsdt.toFixed(2)});
-  lineChart($('eqChart'),{key:'eq',points:eqPts,height:220,color:css('--series-1'),title:'Évolution du capital en USDT',
+  lineChart($('eqChart'),{key:'eq',points:eqPts,height:220,color:css('--series-1'),title:'Évolution du capital en '+Q(),
     refs:w.startUsdt?[{v:w.startUsdt,label:'départ',color:css('--axis')}]:[],
-    fmtY:v=>nf(v,Math.abs(eqPts.at(-1).v)<100?2:0),
+    fmtY:(()=>{const vs=eqPts.map(p=>p.v),r=Math.max(...vs)-Math.min(...vs);const d=r<5?2:r<50?1:0;return v=>nf(v,d);})(),
     rowsAt:p=>[{label:'capital',value:usdt(p.v),color:css('--series-1')},{label:'vs départ',value:pct(w.startUsdt?(p.v/w.startUsdt-1)*100:0)}]});
   $('eqTable').innerHTML='<tr><th>heure</th><th style="text-align:right">capital</th><th style="text-align:right">vs départ</th></tr>'+eqPts.slice(-30).reverse().map(p=>`<tr><td>${dt(p.t)}</td><td class="num">${usdt(p.v)}</td><td class="num">${pct(w.startUsdt?(p.v/w.startUsdt-1)*100:0)}</td></tr>`).join('');
 
@@ -355,10 +357,10 @@ function render(s){
   if(!s.positions.length){box.innerHTML='<div class="empty">aucune position ouverte</div>';}
   else{
     box.innerHTML=s.positions.map(p=>`<div class="pos"><div>
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="sym">${esc(p.symbol.replace('_USDT',''))} <span style="font-size:13px;color:var(--ink-2)"><span class="key" style="background:${p.side==='long'?'var(--pole-pos)':'var(--pole-neg)'}"></span> ${p.side==='long'?'▲ LONG':'▼ SHORT'} x${p.leverage}</span></span><button class="btn danger" data-close="${esc(p.id)}">fermer</button></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="sym">${esc((p.display||p.symbol))} <span style="font-size:13px;color:var(--ink-2)"><span class="key" style="background:${p.side==='long'?'var(--pole-pos)':'var(--pole-neg)'}"></span> ${p.side==='long'?'▲ LONG':'▼ SHORT'} x${p.leverage}</span></span><button class="btn danger" data-close="${esc(p.id)}">fermer</button></div>
       <div class="pnl">${delta(p.pnlUsdt,signed(p.pnlUsdt))}</div>
       <div class="sub" style="font-family:var(--sans);font-size:12px;color:var(--ink-2)">${pct(p.pnlPctMargin)} de la marge</div>
-      <div class="kv"><span>marge</span><b>${usdt(p.marginUsdt)}</b><span>entrée</span><b>${fmtP(p.entryPrice)}</b><span>prix actuel</span><b>${fmtP(p.lastPrice)}</b><span>⛔ stop</span><b>${fmtP(p.stopPrice)}${p.serverStop?' · sur MEXC':''}${p.trailing?' · suiveur':''}</b><span>résultat en R</span><b>${p.rMultiple!=null?(p.rMultiple>=0?'+':'−')+nf(Math.abs(p.rMultiple),2)+' R':'—'}</b><span>contrats</span><b>${p.contracts}</b><span>durée</span><b>${dur(s.now-p.openedAt)}</b></div>
+      <div class="kv"><span>marge</span><b>${usdt(p.marginUsdt)}</b><span>entrée</span><b>${fmtP(p.entryPrice)}</b><span>prix actuel</span><b>${fmtP(p.lastPrice)}</b><span>⛔ stop</span><b>${fmtP(p.stopPrice)}${p.serverStop?' · chez '+esc(s.exchange):''}${p.trailing?' · suiveur':''}</b><span>résultat en R</span><b>${p.rMultiple!=null?(p.rMultiple>=0?'+':'−')+nf(Math.abs(p.rMultiple),2)+' R':'—'}</b><span>contrats</span><b>${p.contracts}</b><span>durée</span><b>${dur(s.now-p.openedAt)}</b></div>
       </div><div class="chart" data-pos="${esc(p.id)}"></div></div>`).join('');
     for(const p of s.positions){
       const host=box.querySelector(`[data-pos="${CSS.escape(p.id)}"]`);
@@ -372,7 +374,7 @@ function render(s){
 
   const chrono=[...s.closed].reverse();
   pnlBars($('pnlChart'),chrono);
-  $('closed').innerHTML=s.closed.length?'<tr><th>fermé</th><th>contrat</th><th>sens</th><th style="text-align:right">P&L</th><th style="text-align:right">% marge</th><th>raison</th></tr>'+s.closed.map(c=>`<tr><td>${dt(c.closedAt)}</td><td>${esc(c.symbol)}</td><td>${c.side==='long'?'▲ long':'▼ short'}</td><td class="num">${signed(c.pnlUsdt)}${c.estimated?'*':''}</td><td class="num">${pct(c.pnlPctMargin)}</td><td>${esc(c.reason)}</td></tr>`).join(''):'<tr><td class="empty">aucun trade fermé</td></tr>';
+  $('closed').innerHTML=s.closed.length?'<tr><th>fermé</th><th>contrat</th><th>sens</th><th style="text-align:right">P&L</th><th style="text-align:right">% marge</th><th>raison</th></tr>'+s.closed.map(c=>`<tr><td>${dt(c.closedAt)}</td><td>${esc(c.display||c.symbol)}</td><td>${c.side==='long'?'▲ long':'▼ short'}</td><td class="num">${signed(c.pnlUsdt)}${c.estimated?'*':''}</td><td class="num">${pct(c.pnlPctMargin)}</td><td>${esc(c.reason)}</td></tr>`).join(''):'<tr><td class="empty">aucun trade fermé</td></tr>';
   $('log').innerHTML=s.log.map(x=>`<div class="${x.level}"><span class="tm">${new Date(x.t).toLocaleString('fr-FR')}</span><span>${esc(x.msg)}</span></div>`).join('');
 }
 let resizeT;window.addEventListener('resize',()=>{clearTimeout(resizeT);resizeT=setTimeout(()=>S&&render(S),150);});

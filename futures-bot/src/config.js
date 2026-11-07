@@ -44,9 +44,17 @@ export const config = {
   mode: args.mode || str('MODE', 'paper'), // paper | live
   scanOnly: args['scan-only'] === 'true',
   testApi: args['test-api'] === 'true',
+  exchange: (args.exchange || str('EXCHANGE', 'okx')).toLowerCase(), // okx | mexc
   baseUrl: str('MEXC_BASE_URL', 'https://api.mexc.com').replace(/\/$/, ''),
   apiKey: str('MEXC_API_KEY', ''),
   apiSecret: str('MEXC_API_SECRET', ''),
+  okx: {
+    baseUrl: str('OKX_BASE_URL', 'https://eea.okx.com').replace(/\/$/, ''), // comptes EEE
+    apiKey: str('OKX_API_KEY', ''),
+    apiSecret: str('OKX_API_SECRET', ''),
+    passphrase: str('OKX_PASSPHRASE', ''),
+    demo: bool('OKX_DEMO', false), // true = compte démo OKX (trading simulé avec la vraie API)
+  },
   liveConfirm: str('LIVE_CONFIRM', ''),
   dataDir: path.join(ROOT, 'data'),
   listDir: path.join(ROOT, 'listes'),
@@ -59,12 +67,12 @@ export const config = {
 
   // --- Liste du matin ---
   morningTime: str('MORNING_TIME', '08:00'), // heure locale du PC
-  minTurnoverUsdt: num('MIN_TURNOVER_USDT', 8_000_000), // volume 24 h minimum
+  minTurnoverUsdt: num('MIN_TURNOVER_USDT', 0), // 0 = valeur par défaut de la plateforme (OKX 500 k$, MEXC 8 M$)
   universeSize: num('UNIVERSE_SIZE', 60), // les N contrats crypto les plus liquides
   listSize: num('LIST_SIZE', 5),
   btcRegime: bool('BTC_REGIME', true), // ne trader que dans le sens du BTC (vs moyenne 50 j)
   corrBudget: num('CORR_BUDGET', 2.4), // somme des corrélations BTC autorisée par côté
-  exclude: str('EXCLUDE', 'USDC_USDT,FDUSD_USDT,TUSD_USDT,USDE_USDT,DAI_USDT,PAXG_USDT,XAUT_USDT')
+  exclude: str('EXCLUDE', 'USDC,FDUSD,TUSD,USDE,DAI,PAXG,XAUT')
     .split(',')
     .map((s) => s.trim().toUpperCase())
     .filter(Boolean),
@@ -109,13 +117,15 @@ export const config = {
 export function validateConfig() {
   const c = config;
   if (!['paper', 'live'].includes(c.mode)) throw new Error(`MODE doit être "paper" ou "live" (reçu "${c.mode}")`);
+  if (!['okx', 'mexc'].includes(c.exchange)) throw new Error(`EXCHANGE doit être "okx" ou "mexc" (reçu "${c.exchange}")`);
   if (c.mode === 'live' || c.testApi) {
-    if (!c.apiKey || !c.apiSecret) throw new Error('MEXC_API_KEY et MEXC_API_SECRET sont requis (fichier .env).');
+    if (c.exchange === 'okx' && (!c.okx.apiKey || !c.okx.apiSecret || !c.okx.passphrase)) throw new Error('OKX_API_KEY, OKX_API_SECRET et OKX_PASSPHRASE sont requis (fichier .env).');
+    if (c.exchange === 'mexc' && (!c.apiKey || !c.apiSecret)) throw new Error('MEXC_API_KEY et MEXC_API_SECRET sont requis (fichier .env).');
   }
   if (c.mode === 'live' && c.liveConfirm !== 'JE_COMPRENDS_LES_RISQUES') {
     throw new Error('Mode live refusé : ajoute LIVE_CONFIRM=JE_COMPRENDS_LES_RISQUES dans .env pour confirmer que tu acceptes de perdre cet argent.');
   }
-  if (c.leverage < 1 || c.leverage > 20) throw new Error('LEVERAGE doit être entre 1 et 20.');
+  if (c.leverage < 1 || c.leverage > 10) throw new Error('LEVERAGE doit être entre 1 et 10 (10x = maximum particulier dans l’UE).');
   if (c.riskPerTradePct <= 0 || c.riskPerTradePct > 3) throw new Error('RISK_PER_TRADE_PCT doit être entre 0 et 3.');
   if (c.maxMarginPct <= 0 || c.maxMarginPct > 25) throw new Error('MAX_MARGIN_PCT doit être entre 0 et 25.');
   if (c.stopAtr <= 0) throw new Error('STOP_ATR doit être > 0.');
