@@ -32,6 +32,30 @@ Aucune installation de paquet n'est nécessaire : le bot n'a aucune dépendance.
 
 Sur Mac ou Linux : `npm run paper`, `npm run liste`, `npm run test-api`, `npm run live`.
 
+### Sur un téléphone Android (Termux)
+
+Le bot n'a aucune dépendance : il tourne sur Android avec l'appli **Termux**.
+
+1. Installe **Termux depuis F-Droid** (https://f-droid.org/packages/com.termux/). La version du Play Store est ancienne et ne fonctionne plus bien.
+2. Dans Termux, installe Node.js et récupère le bot :
+   ```bash
+   pkg update && pkg install -y nodejs-lts curl unzip
+   curl -L -o bot.zip https://github.com/khamess/jenkins-sample/archive/refs/heads/ccr-1c39e7ec-eg9g2c.zip
+   unzip -q bot.zip && mv jenkins-sample-*/futures-bot ~/futures-bot && rm -rf bot.zip jenkins-sample-*
+   ```
+   Si le dépôt est privé, le téléchargement échouera. Copie alors le dossier `futures-bot` depuis ton PC, puis lance `termux-setup-storage` et `cp -r ~/storage/downloads/futures-bot ~/`.
+3. Lance le bot :
+   ```bash
+   cd ~/futures-bot && bash android.sh          # paper (argent fictif)
+   ```
+   Ouvre ensuite **http://127.0.0.1:8790** dans Chrome. Pour modifier les réglages : `nano .env`.
+4. **Empêche Android de tuer le bot** :
+   - `android.sh` active le maintien en éveil de Termux (une notification « wake lock » apparaît) ;
+   - désactive l'optimisation de batterie pour Termux : *Paramètres → Applis → Termux → Batterie → Non restreinte* ;
+   - laisse le téléphone **branché** : le bot consomme peu, mais il tourne en continu.
+
+Limites honnêtes du téléphone : si Android coupe Termux, que le réseau saute ou que la batterie se vide, le bot s'arrête. Il ne suit alors plus le trailing stop et ne génère plus la liste du matin. Les **stops restent posés chez la plateforme** et protègent tes positions. Au redémarrage, `bash android.sh` reprend l'état sauvegardé. Pour du 24 h/24 fiable, un PC toujours allumé ou un petit serveur reste préférable : tu peux alors juste consulter le tableau de bord depuis ton téléphone.
+
 ### Démarrage automatique avec Windows
 
 Appuie sur `Win + R`, tape `shell:startup`, puis place dans ce dossier un raccourci vers `lancer-paper.bat` (ou `lancer-live.bat`). Le PC doit rester allumé et ne pas se mettre en veille : *Paramètres → Système → Alimentation → Veille : Jamais*.
