@@ -223,7 +223,8 @@ export function runVariant(D, V) {
 // ---------- Variantes comparées ----------
 const BASE = {
   // OKX X-Perps : moins liquides → frais et slippage plus prudents
-  feePct: ex.name === 'okx' ? 0.05 : 0.04,
+  // frais "taker" de chaque plateforme ; OKX X-Perps moins liquides → slippage plus prudent
+  feePct: { okx: 0.05, weex: 0.08 }[ex.name] ?? 0.04,
   slipPct: ex.name === 'okx' ? 0.1 : 0.05,
   leverage: 5,
   marginPct: 5,

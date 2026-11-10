@@ -33,7 +33,7 @@ function readManual() {
   }
 }
 
-const defaultTurnover = () => config.minTurnoverUsdt || (ex.name === 'okx' ? 500_000 : 8_000_000);
+const defaultTurnover = () => config.minTurnoverUsdt || { okx: 500_000, weex: 10_000_000 }[ex.name] || 8_000_000;
 
 /** Univers : contrats crypto de la plateforme, triés par volume 24 h. */
 export async function buildUniverse(manual) {

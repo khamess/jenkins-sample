@@ -44,7 +44,7 @@ export const config = {
   mode: args.mode || str('MODE', 'paper'), // paper | live
   scanOnly: args['scan-only'] === 'true',
   testApi: args['test-api'] === 'true',
-  exchange: (args.exchange || str('EXCHANGE', 'okx')).toLowerCase(), // okx | mexc
+  exchange: (args.exchange || str('EXCHANGE', 'okx')).toLowerCase(), // okx | mexc | weex
   baseUrl: str('MEXC_BASE_URL', 'https://api.mexc.com').replace(/\/$/, ''),
   apiKey: str('MEXC_API_KEY', ''),
   apiSecret: str('MEXC_API_SECRET', ''),
@@ -54,6 +54,13 @@ export const config = {
     apiSecret: str('OKX_API_SECRET', ''),
     passphrase: str('OKX_PASSPHRASE', ''),
     demo: bool('OKX_DEMO', false), // true = compte démo OKX (trading simulé avec la vraie API)
+  },
+  weex: {
+    baseUrl: str('WEEX_BASE_URL', 'https://api-contract.weex.com').replace(/\/$/, ''),
+    apiKey: str('WEEX_API_KEY', ''),
+    apiSecret: str('WEEX_API_SECRET', ''),
+    passphrase: str('WEEX_PASSPHRASE', ''),
+    demo: bool('WEEX_DEMO', false), // true = trading démo WEEX (SUSDT fictifs)
   },
   liveConfirm: str('LIVE_CONFIRM', ''),
   dataDir: path.join(ROOT, 'data'),
@@ -117,10 +124,11 @@ export const config = {
 export function validateConfig() {
   const c = config;
   if (!['paper', 'live'].includes(c.mode)) throw new Error(`MODE doit être "paper" ou "live" (reçu "${c.mode}")`);
-  if (!['okx', 'mexc'].includes(c.exchange)) throw new Error(`EXCHANGE doit être "okx" ou "mexc" (reçu "${c.exchange}")`);
+  if (!['okx', 'mexc', 'weex'].includes(c.exchange)) throw new Error(`EXCHANGE doit être "okx", "mexc" ou "weex" (reçu "${c.exchange}")`);
   if (c.mode === 'live' || c.testApi) {
     if (c.exchange === 'okx' && (!c.okx.apiKey || !c.okx.apiSecret || !c.okx.passphrase)) throw new Error('OKX_API_KEY, OKX_API_SECRET et OKX_PASSPHRASE sont requis (fichier .env).');
     if (c.exchange === 'mexc' && (!c.apiKey || !c.apiSecret)) throw new Error('MEXC_API_KEY et MEXC_API_SECRET sont requis (fichier .env).');
+    if (c.exchange === 'weex' && (!c.weex.apiKey || !c.weex.apiSecret || !c.weex.passphrase)) throw new Error('WEEX_API_KEY, WEEX_API_SECRET et WEEX_PASSPHRASE sont requis (fichier .env).');
   }
   if (c.mode === 'live' && c.liveConfirm !== 'JE_COMPRENDS_LES_RISQUES') {
     throw new Error('Mode live refusé : ajoute LIVE_CONFIRM=JE_COMPRENDS_LES_RISQUES dans .env pour confirmer que tu acceptes de perdre cet argent.');

@@ -149,7 +149,9 @@ async function openPosition(cand, price) {
       qty = pos.contracts;
       entry = pos.entryPrice || price;
       if (res.stopAttached) serverStop = stop;
-      else {
+      else if (ex.serverStopsAvailable && !ex.serverStopsAvailable()) {
+        log(`${short(c.symbol)} compte démo : stop surveillé par le bot (pas d'ordre stop côté ${ex.label})`);
+      } else {
         try {
           await ex.placeStop({ symbol: c.symbol, side, contracts: qty, stopPrice: stop, leverage: lev });
           serverStop = stop;
@@ -189,7 +191,7 @@ async function openPosition(cand, price) {
     };
     state.positions.push(p);
     cand.note = 'ouvert';
-    log(`OUVERTURE ${side.toUpperCase()} ${c.display} x${lev} · ${qty} contrat(s) · marge ${p.marginUsdt.toFixed(2)} ${ex.quote} · entrée ${fmt(entry)} · stop ${fmt(stop)}${serverStop ? ` (posé chez ${ex.label})` : ''}`);
+    log(`OUVERTURE ${side.toUpperCase()} ${c.display} x${lev} · ${c.ctVal === 1 ? `${qty} ${c.display}` : `${qty} contrat(s)`} · marge ${p.marginUsdt.toFixed(2)} ${ex.quote} · entrée ${fmt(entry)} · stop ${fmt(stop)}${serverStop ? ` (posé chez ${ex.label})` : ''}`);
     await refreshEquity();
   } catch (e) {
     cand.note = `échec : ${e.message}`;

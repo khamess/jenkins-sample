@@ -3,9 +3,10 @@
 Le bot tourne sur ton PC et trade des contrats à terme crypto.
 
 - **OKX (par défaut).** Il trade les **X-Perps**. OKX est agréé MiCA et MiFID II, et ces contrats sont accessibles aux comptes européens avec un levier jusqu'à 10x. Ce sont des futures à échéance de 5 ans, avec un funding, qui se comportent comme des perpétuels.
+- **WEEX.** Il trade les perpétuels USDT. Attention : WEEX **n'a pas d'agrément MiCA**. L'accès depuis la France peut être restreint à tout moment, et tu n'as pas la protection d'une plateforme régulée.
 - **MEXC.** Il trade les perpétuels USDT. Attention : MEXC quitte la France, avec des restrictions à partir du 31/12/2026 selon ton lot.
 
-On change de plateforme avec une seule ligne dans `.env` : `EXCHANGE=okx` ou `EXCHANGE=mexc`. Toute la plateforme tient dans un module (`src/exchanges/`). Si une plateforme ferme, en ajouter une autre ne demande pas de refaire le bot.
+On change de plateforme avec une seule ligne dans `.env` : `EXCHANGE=okx`, `EXCHANGE=weex` ou `EXCHANGE=mexc`. Toute la plateforme tient dans un module (`src/exchanges/`). Si une plateforme ferme, en ajouter une autre ne demande pas de refaire le bot.
 
 1. **Chaque matin** (08:00 par défaut), il analyse les cryptos les plus liquides de la plateforme. Il produit la **liste du jour**, avec un score sur 100 et la raison de chaque choix.
 2. **Pendant la journée**, il ouvre ces positions (marge isolée, taille calculée sur le risque). Il pose le **stop-loss directement chez la plateforme** et suit un trailing stop.
@@ -161,6 +162,26 @@ Limites : l'univers est celui des contrats liquides **aujourd'hui** (biais du su
    ```
 5. **Recommandé : teste d'abord sur le compte démo d'OKX.** Crée une clé dans le mode « Trading démo » d'OKX, mets `OKX_DEMO=true`, puis lance `lancer-live.bat`. Ce sont de vrais ordres sur la vraie API, mais avec de l'argent fictif. C'est le meilleur test avant le réel.
 6. **Passe en réel.** Transfère seulement la somme que tu acceptes de perdre. Mets `OKX_DEMO=false` et ajoute `LIVE_CONFIRM=JE_COMPRENDS_LES_RISQUES`, puis lance `lancer-live.bat`.
+
+### Sur WEEX
+
+1. Sur WEEX : *Profil → Gestion API → Créer une clé*.
+   - Coche **uniquement** la lecture et le trading Futures. **Ne coche jamais le retrait.**
+   - Lie la clé à l'**adresse IP de ton PC** et note la **passphrase**.
+2. Dans `.env` :
+   ```
+   EXCHANGE=weex
+   WEEX_API_KEY=...
+   WEEX_API_SECRET=...
+   WEEX_PASSPHRASE=...
+   ```
+   puis `tester-cle-api.bat`.
+3. **Teste d'abord en démo** avec `WEEX_DEMO=true`. Les ordres sont réels, mais passés avec des SUSDT fictifs. L'API démo de WEEX ne permet pas de poser des stops : le bot les surveille lui-même, donc garde le PC allumé pendant ce test.
+4. **En réel,** le stop est attaché à l'ordre d'entrée (`slTriggerPrice`). Le bot passe chaque position en **marge isolée** : une mauvaise position ne peut pas vider tout le compte. Ne passe jamais un trade du bot en marge croisée.
+
+Bon à savoir sur WEEX :
+- Seuls les contrats **ouverts à l'API** sont tradés. STONK, par exemple, ne l'est pas.
+- Les frais sont de 0,08 % par ordre au marché, contre 0,05 % chez OKX : ils pèsent plus lourd sur le résultat.
 
 Sur MEXC (`EXCHANGE=mexc`), la marche à suivre est la même avec `MEXC_API_KEY` et `MEXC_API_SECRET`. Il n'y a pas de passphrase ni de compte démo.
 

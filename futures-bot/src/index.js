@@ -89,7 +89,7 @@ async function equityPoint() {
 }
 
 async function testApi() {
-  console.log(`Test de connexion à ${ex.label}${config.exchange === 'okx' ? ` (${config.okx.baseUrl}${config.okx.demo ? ', compte DÉMO' : ''})` : ''}…`);
+  console.log(`Test de connexion à ${ex.label}${config.exchange === 'okx' ? ` (${config.okx.baseUrl}${config.okx.demo ? ', compte DÉMO' : ''})` : config.exchange === 'weex' && config.weex.demo ? ' (compte DÉMO)' : ''}…`);
   const contracts = await ex.getContracts();
   console.log(`  ✓ API publique OK — ${contracts.length} contrats crypto disponibles`);
   const info = await ex.init();
@@ -114,7 +114,7 @@ async function main() {
       await testApi();
       process.exit(0);
     } catch (e) {
-      console.error(`\nÉchec : ${e.message}\n\nVérifie la clé, le secret${config.exchange === 'okx' ? ', la passphrase' : ''}, la permission de trading et la liste d'IP autorisées de la clé.\n`);
+      console.error(`\nÉchec : ${e.message}\n\nVérifie la clé, le secret${config.exchange !== 'mexc' ? ', la passphrase' : ''}, la permission de trading et la liste d'IP autorisées de la clé.\n`);
       process.exit(1);
     }
   }
@@ -137,7 +137,8 @@ async function main() {
     console.error(`\nConnexion à ${ex.label} impossible : ${e.message}\n`);
     process.exit(1);
   }
-  log(`Bot démarré sur ${ex.label} en mode ${config.mode.toUpperCase()}${config.mode === 'paper' ? ` (argent fictif, vrais prix ${ex.label})` : ' — ARGENT RÉEL'} · capital ${state.wallet.equityUsdt.toFixed(2)} ${ex.quote}`);
+  const isDemo = (config.exchange === 'okx' && config.okx.demo) || (config.exchange === 'weex' && config.weex.demo);
+  log(`Bot démarré sur ${ex.label} en mode ${config.mode.toUpperCase()}${config.mode === 'paper' ? ` (argent fictif, vrais prix ${ex.label})` : isDemo ? ` — COMPTE DÉMO ${ex.label} (vrais ordres, argent fictif)` : ' — ARGENT RÉEL'} · capital ${state.wallet.equityUsdt.toFixed(2)} ${ex.quote}`);
   if (restored) log(`État restauré : ${state.positions.length} position(s) ouverte(s)`);
 
   startServer({ runMorning });
