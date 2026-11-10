@@ -134,6 +134,8 @@ Résultats au 07/11/2026, sur les 35 contrats crypto les plus liquides de chaque
 
 PF = profit factor (gains ÷ pertes). DD = pire baisse depuis un sommet. Les rendements de la v2 sont calculés à 0,6 % de risque par trade.
 
+**WEEX, sur les 180 derniers jours (frais de 0,08 % par ordre) :** v1 à +6,5 %, PF 1,04, DD −28 %. v2 à **+22,4 %, PF 1,75, DD −7 %**. Pour la v2, presque tout le gain vient de la seconde moitié de la période, quand le marché était baissier.
+
 - **Frais du backtest :** 0,04 % de frais et 0,05 % de slippage par ordre sur MEXC, 0,05 % et 0,1 % sur OKX, plus prudent car les X-Perps sont moins liquides.
 - **Historique OKX :** les X-Perps n'existent que depuis avril 2026. Le backtest OKX utilise donc l'historique des perpétuels USDT d'OKX sur les mêmes cryptos.
 - **Plateforme testée :** `node src/backtest.js --exchange=okx` ou `--exchange=mexc`.
